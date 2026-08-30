@@ -7,6 +7,12 @@ _research/TradingAgents/
 node_modules/
 dist/
 
+# pnpm 本地 store
+.pnpm-store/
+
+# npm 本地缓存（绕开全局缓存权限问题）
+.npm-cache/
+
 # 环境与密钥
 .env
 .env.local

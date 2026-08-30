@@ -1,0 +1,21 @@
+{
+  "name": "stock-backend",
+  "version": "0.1.0",
+  "description": "A股智能分析后端 —— 数据代理 + 派生指标 + DeepSeek 分析服务",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
