@@ -1,0 +1,15 @@
+# 第三方研究用克隆（各自是独立 git 仓库，不入版本库）
+_research/ai-hedge-fund/
+_research/OpenBB/
+_research/TradingAgents/
+
+# 依赖
+node_modules/
+dist/
+
+# 环境与密钥
+.env
+.env.local
+
+# 系统文件
+.DS_Store
