@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/eastmoney.js", () => ({
+vi.mock("../src/datasource.js", () => ({
   fetchQuote: vi.fn(),
   fetchKline: vi.fn(),
-  fetchSuggest: vi.fn(),
 }));
 
+vi.mock("../src/tencent.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/tencent.js")>();
+  return { ...actual, fetchSuggest: vi.fn() };
+});
+
 import { buildApp } from "../src/app.js";
-import { fetchKline, fetchQuote, fetchSuggest } from "../src/eastmoney.js";
+import { fetchKline, fetchQuote } from "../src/datasource.js";
+import { fetchSuggest } from "../src/tencent.js";
 
 const app = buildApp();
 

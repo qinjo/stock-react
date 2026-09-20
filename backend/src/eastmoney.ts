@@ -1,4 +1,4 @@
-import type { Kline, Quote, SearchCandidate } from "./domain.js";
+import type { Kline, Quote } from "./domain.js";
 
 /**
  * 东方财富数据适配器。
@@ -9,11 +9,12 @@ import type { Kline, Quote, SearchCandidate } from "./domain.js";
  *
  * 字段缩放陷阱（实测）：价格、涨跌幅、PE、PB、换手率均为 ×100 整数；
  * 成交量（手）、成交额（元）、市值（元）不缩放。
+ *
+ * 搜索与备源（腾讯）见 `tencent.ts`；主备降级编排见 `datasource.ts`。
  */
 
 const PUSH2 = "https://push2.eastmoney.com";
 const PUSH2HIS = "https://push2his.eastmoney.com";
-const SMARTBOX = "https://smartbox.gtimg.cn/s3/";
 
 /** 东财原始响应中缺失值常为 "-" 或 null；统一转为 null。 */
 function num(v: unknown, scale = 1): number | null {
@@ -120,48 +121,6 @@ export function normalizeKline(raw: unknown, limit?: number): Kline[] {
   return parsed;
 }
 
-/**
- * 归一化搜索建议。
- *
- * 数据源说明（实测结论）：搜索改用**腾讯 smartbox**而非东财 suggest ——
- * 东财同一 URL 对服务端请求返回「用户搜索」结果（`result.passportWeb`）而非
- * 股票代码表（`QuotationCodeTable`），行为不稳定且无法在 Node 端可靠复现
- * curl 的成功响应（疑似 TLS 指纹相关）。
- *
- * 腾讯格式：`v_hint="sh~600519~\u8d35\u5dde\u8305\u53f0~gzmt~GP-A^…"`
- * 字段序：市场~代码~名称(unicode 转义)~拼音~类型；多条以 `^` 分隔。
- * 类型以 `GP-A` 开头者为 A 股（另有 FJ/LOF/ZS 等非股票类型，需过滤）。
- */
-export function normalizeTencentSuggest(text: string): SearchCandidate[] {
-  const match = text.match(/v_hint\s*=\s*"([\s\S]*?)"\s*;?\s*$/);
-  const body = match?.[1] ?? "";
-  if (!body) return [];
-
-  return body
-    .split("^")
-    .map((entry) => entry.split("~"))
-    .filter((parts) => parts.length >= 5 && parts[4]!.startsWith("GP-A"))
-    .map((parts) => {
-      const [market = "", code = "", rawName = "", pinyin = ""] = parts;
-      const isSh = market.toLowerCase() === "sh";
-      return {
-        code,
-        name: decodeUnicodeEscapes(rawName),
-        secid: `${isSh ? "1" : "0"}.${code}`,
-        market: isSh ? "沪A" : "深A",
-        pinyin: pinyin.toUpperCase(),
-      };
-    })
-    .filter((c) => c.code !== "");
-}
-
-/** 解码 `\uXXXX` 转义（腾讯 smartbox 对中文名的编码方式）。 */
-function decodeUnicodeEscapes(s: string): string {
-  return s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) =>
-    String.fromCharCode(Number.parseInt(hex, 16)),
-  );
-}
-
 /* ------------------------------- 网络层 ------------------------------- */
 
 /**
@@ -205,26 +164,17 @@ const QUOTE_FIELDS =
 const KLINE_FIELDS1 = "f1,f2,f3,f4,f5,f6";
 const KLINE_FIELDS2 = "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61";
 
-export async function fetchQuote(input: string): Promise<Quote> {
+export async function fetchEastmoneyQuote(input: string): Promise<Quote> {
   const secid = resolveSecid(input);
   const url = `${PUSH2}/api/qt/stock/get?secid=${secid}&fields=${QUOTE_FIELDS}`;
   return normalizeQuote(await getJson(url, QUOTE_HEADERS));
 }
 
-export async function fetchKline(input: string, limit = 60): Promise<Kline[]> {
+export async function fetchEastmoneyKline(input: string, limit = 60): Promise<Kline[]> {
   const secid = resolveSecid(input);
   const url =
     `${PUSH2HIS}/api/qt/stock/kline/get?secid=${secid}&klt=101&fqt=1` +
     `&fields1=${KLINE_FIELDS1}&fields2=${KLINE_FIELDS2}` +
     `&beg=0&end=20500101`;
   return normalizeKline(await getJson(url, QUOTE_HEADERS), limit);
-}
-
-export async function fetchSuggest(query: string, count = 10): Promise<SearchCandidate[]> {
-  const q = query.trim();
-  if (!q) return [];
-  const url = `${SMARTBOX}?q=${encodeURIComponent(q)}&t=all`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`数据源请求失败：HTTP ${res.status}`);
-  return normalizeTencentSuggest(await res.text()).slice(0, count);
 }

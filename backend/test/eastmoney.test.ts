@@ -2,13 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  normalizeKline,
-  normalizeQuote,
-  normalizeTencentSuggest,
-  parseMaybeJsonp,
-  resolveSecid,
-} from "../src/eastmoney.js";
+import { normalizeKline, normalizeQuote, parseMaybeJsonp, resolveSecid } from "../src/eastmoney.js";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const load = (name: string) => JSON.parse(readFileSync(join(fixtures, name), "utf8"));
@@ -139,38 +133,5 @@ describe("parseMaybeJsonp", () => {
   it("空响应与非法格式抛错", () => {
     expect(() => parseMaybeJsonp("")).toThrow();
     expect(() => parseMaybeJsonp("not json at all")).toThrow();
-  });
-});
-
-describe("normalizeTencentSuggest", () => {
-  it("中文名搜索解析出 A 股候选（unicode 转义解码）", () => {
-    const list = normalizeTencentSuggest(loadText("suggest-tencent-maotai.raw.txt"));
-    expect(list).toHaveLength(1);
-    expect(list[0]).toEqual({
-      code: "600519",
-      name: "贵州茅台",
-      secid: "1.600519",
-      market: "沪A",
-      pinyin: "GZMT",
-    });
-  });
-
-  it("过滤非 A 股类型（FJ/LOF），仅保留 GP-A", () => {
-    const list = normalizeTencentSuggest(loadText("suggest-tencent-multi.raw.txt"));
-    expect(list.length).toBeGreaterThan(0);
-    expect(list.every((c) => !c.name.includes("REIT"))).toBe(true);
-    expect(list[0]).toEqual({
-      code: "000001",
-      name: "平安银行",
-      secid: "0.000001",
-      market: "深A",
-      pinyin: "PAYH",
-    });
-  });
-
-  it("空响应与异常格式返回空数组", () => {
-    expect(normalizeTencentSuggest('v_hint="N";')).toEqual([]);
-    expect(normalizeTencentSuggest("")).toEqual([]);
-    expect(normalizeTencentSuggest("garbage")).toEqual([]);
   });
 });

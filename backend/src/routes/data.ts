@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { fetchKline, fetchQuote, fetchSuggest } from "../eastmoney.js";
+import { fetchKline, fetchQuote } from "../datasource.js";
+import { fetchSuggest } from "../tencent.js";
 import { ApiError } from "../errors.js";
 
 /**
