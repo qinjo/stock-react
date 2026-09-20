@@ -1,16 +1,74 @@
-import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import App from "./App";
 
-const okHealth = {
-  ok: true,
-  json: () =>
-    Promise.resolve({ status: "ok", service: "stock-backend", time: "2026-08-30T08:00:00.000Z" }),
+const health = { status: "ok", service: "stock-backend", time: "2026-08-30T08:00:00.000Z" };
+const candidates = [
+  { code: "600519", name: "贵州茅台", secid: "1.600519", market: "沪A", pinyin: "GZMT" },
+];
+const quote = {
+  code: "600519",
+  name: "贵州茅台",
+  price: 1257.12,
+  open: 1262.99,
+  high: 1265.88,
+  low: 1256.1,
+  prevClose: 1266.98,
+  changePercent: -0.78,
+  limitUp: 1393.68,
+  limitDown: 1140.28,
+  volume: 24891,
+  amount: 3135849108,
+  marketCap: 1571502582249.12,
+  floatMarketCap: 1571502582249.12,
+  pe: 17.65,
+  pb: 6.25,
+  turnoverRate: 0.2,
 };
+const klines = [
+  {
+    date: "2026-09-18",
+    open: 1262.99,
+    close: 1257.12,
+    high: 1265.88,
+    low: 1256.1,
+    volume: 24891,
+    amount: null,
+    amplitude: null,
+    changePercent: null,
+    changeAmount: null,
+    turnoverRate: null,
+  },
+];
+
+/** 按 URL 片段分流 stub fetch。 */
+function stubRoutes(routes: Array<[string, unknown]>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      for (const [fragment, body] of routes) {
+        if (url.includes(fragment)) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+        }
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      } as Response);
+    }),
+  );
+}
 
 beforeEach(() => {
-  // 每个测试都 stub fetch，避免真实请求在 jsdom 中抛错导致 act 警告
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okHealth));
+  stubRoutes([
+    ["/api/health", health],
+    ["/api/search", { candidates }],
+    ["/api/quote", { quote }],
+    ["/api/kline", { klines }],
+  ]);
 });
 
 afterEach(() => {
@@ -18,25 +76,74 @@ afterEach(() => {
 });
 
 describe("App 入口页", () => {
-  it("渲染查询入口与标题", () => {
+  it("渲染标题与查询入口", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "A股智能分析" })).toBeInTheDocument();
     expect(screen.getByLabelText("股票代码 / 名称")).toBeInTheDocument();
   });
 
-  it("后端健康时显示连通状态", async () => {
+  it("显示后端连通状态", async () => {
     render(<App />);
     await waitFor(() => {
       expect(screen.getByText(/stock-backend · ok/)).toBeInTheDocument();
     });
   });
+});
 
-  it("后端不可用时显示错误提示", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+describe("App 选股到行情展示的完整路径", () => {
+  it("输入名称补全后选中，展示快照卡与 K 线区域", async () => {
+    render(<App />);
+    const input = screen.getByLabelText("股票代码 / 名称");
+
+    await userEvent.type(input, "茅台");
+    const option = await screen.findByRole("option", { name: /贵州茅台/ });
+    await userEvent.click(option);
+
+    await waitFor(() => {
+      expect(screen.getByText("贵州茅台")).toBeInTheDocument();
+    });
+    expect(screen.getByText("市盈率(动)")).toBeInTheDocument();
+    expect(screen.getByText("17.65")).toBeInTheDocument();
+    expect(screen.getByText(/数据截至：2026-09-18/)).toBeInTheDocument();
+    expect(screen.getByTestId("kline-container")).toBeInTheDocument();
+  });
+
+  it("数据源不可用时展示可辨识的告警态", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/quote")) {
+          return Promise.resolve({
+            ok: false,
+            status: 502,
+            json: () =>
+              Promise.resolve({
+                status: "error",
+                code: "SOURCE_UNAVAILABLE",
+                message: "行情数据源暂时不可用",
+              }),
+          } as Response);
+        }
+        if (url.includes("/api/kline")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ klines }) } as Response);
+        }
+        if (url.includes("/api/search")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ candidates }),
+          } as Response);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(health) } as Response);
+      }),
+    );
 
     render(<App />);
+    await userEvent.type(screen.getByLabelText("股票代码 / 名称"), "茅台");
+    await userEvent.click(await screen.findByRole("option", { name: /贵州茅台/ }));
+
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("无法连接后端");
+      expect(screen.getByRole("alert")).toHaveTextContent("数据源暂时不可用");
     });
   });
 });
