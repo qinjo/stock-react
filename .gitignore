@@ -1,7 +1,6 @@
-# 第三方研究用克隆（各自是独立 git 仓库，不入版本库）
-_research/ai-hedge-fund/
-_research/OpenBB/
-_research/TradingAgents/
+# 第三方研究用克隆（各自是独立 git 仓库，不入版本库）；笔记(.md)保留
+_research/*/
+!_research/*.md
 
 # 依赖
 node_modules/

@@ -1,4 +1,4 @@
-import type { Analysis, AnalysisSections, Rating } from "./types.js";
+import type { Analysis, AnalysisSections, Invalidation, Rating } from "./types.js";
 import { RATINGS } from "./types.js";
 
 /**
@@ -124,7 +124,19 @@ function normalizeSections(raw: unknown): AnalysisSections {
     fundamentals: asText(s.fundamentals),
     technicals: asText(s.technicals),
     risks: asStringArray(s.risks),
-    conclusion: asText(s.conclusion),
+  };
+}
+
+/** 解析判断失效位；缺价格视为未提供（不伪造）。 */
+function normalizeInvalidation(raw: unknown): Invalidation | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const price = nullableNumber(o.price);
+  if (price === null) return null;
+  return {
+    price,
+    basis: asText(o.basis, "模型未说明依据"),
+    distancePercent: nullableNumber(o.distance_percent ?? o.distancePercent),
   };
 }
 
@@ -156,7 +168,12 @@ export function parseAnalysis(text: string): Analysis {
     confidence,
     reasoning: asText(obj.reasoning, "（模型未给出理由）"),
     priceTarget: nullableNumber(obj.price_target ?? obj.priceTarget),
+    priceTargetBasis: nullableString(obj.price_target_basis ?? obj.priceTargetBasis),
     timeHorizon: nullableString(obj.time_horizon ?? obj.timeHorizon),
+    invalidation: normalizeInvalidation(obj.invalidation),
     sections: normalizeSections(obj.sections),
+    dataLimits: asStringArray(obj.data_limits ?? obj.dataLimits),
+    whatWouldChangeMyMind: asText(obj.what_would_change_my_mind ?? obj.whatWouldChangeMyMind),
+    monitoring: asStringArray(obj.monitoring),
   };
 }

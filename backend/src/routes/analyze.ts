@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { fetchKline, fetchQuote } from "../datasource.js";
 import { computeIndicators, InsufficientDataError } from "../indicators.js";
+import { deriveValuation, tallySignals } from "../derived.js";
 import { runAnalysis, type CachedAnalysis } from "../analysis/index.js";
 import type { PromptCache } from "../cache.js";
 import type { ChatFn } from "../analysis/llm.js";
@@ -47,6 +48,9 @@ export async function buildAnalysisInput(code: string): Promise<AnalysisInput> {
       turnoverRate: quote.turnoverRate,
     },
     indicators: indicators as unknown as Record<string, unknown>,
+    // 派生估值量（PE/PB 推导）与多空一致性统计，均零外部数据、零 LLM 成本
+    implied: deriveValuation(quote),
+    tally: tallySignals(indicators, quote),
     klines: klines.slice(-PROMPT_KLINES).map((k) => ({
       date: k.date,
       open: k.open,

@@ -81,12 +81,19 @@ export const RATING_LABELS: Record<Rating, string> = {
   sell: "卖出",
 };
 
+/** 报告分节（conclusion 已删除：顶层 rating + 收尾三块已覆盖其作用）。 */
 export type AnalysisSections = {
   snapshot: string;
   fundamentals: string;
   technicals: string;
   risks: string[];
-  conclusion: string;
+};
+
+/** 判断失效位：价格触及此位则原结论需重新评估。 */
+export type Invalidation = {
+  price: number;
+  basis: string;
+  distancePercent: number | null;
 };
 
 export type Analysis = {
@@ -94,8 +101,17 @@ export type Analysis = {
   confidence: number;
   reasoning: string;
   priceTarget: number | null;
+  /** 目标价推导路径，或说明缺什么数据 */
+  priceTargetBasis: string | null;
   timeHorizon: string | null;
+  invalidation: Invalidation | null;
   sections: AnalysisSections;
+  /** 数据边界：本次未提供的数据维度及其对结论的限制 */
+  dataLimits: string[];
+  /** 什么可观察信号会改变该判断 */
+  whatWouldChangeMyMind: string;
+  /** 后续需跟踪的指标与阈值 */
+  monitoring: string[];
 };
 
 /** LLM 调用的 token 用量（成本可观测）。 */

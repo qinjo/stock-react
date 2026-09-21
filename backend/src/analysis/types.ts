@@ -1,16 +1,31 @@
+import type { ImpliedValuation, SignalTally } from "../derived.js";
+
 /** 分析领域类型：LLM 输出契约与编排结果。 */
 
 /** 5 档评级（与 TradingAgents 的 5 档体系对齐）。 */
 export const RATINGS = ["buy", "overweight", "hold", "underweight", "sell"] as const;
 export type Rating = (typeof RATINGS)[number];
 
-/** 报告分节：①快照 ②基本面 ③技术面 ④风险清单 ⑤结论。 */
+/**
+ * 报告分节：①快照 ②基本面 ③技术面 ④风险清单。
+ *
+ * 注意：**已删除 conclusion 段**（调研结论：顶层已有 rating，再写 conclusion
+ * 只会产出"综上所述"式套话；收尾改为 whatWouldChangeMyMind + monitoring）。
+ */
 export type AnalysisSections = {
   snapshot: string;
   fundamentals: string;
   technicals: string;
   risks: string[];
-  conclusion: string;
+};
+
+/** 判断失效位：价格触及此位则原结论需重新评估。 */
+export type Invalidation = {
+  price: number;
+  /** 选取依据（区间低点 / SMA50 / SMA200 / 价-2ATR） */
+  basis: string;
+  /** 距当前价的百分比（正=需下跌，负=需上涨） */
+  distancePercent: number | null;
 };
 
 /** LLM 返回的结构化信号（原始契约，字段名与提示词一致）。 */
@@ -19,8 +34,13 @@ export type RawAnalysis = {
   confidence: number;
   reasoning: string;
   price_target: number | null;
+  price_target_basis: string | null;
   time_horizon: string | null;
+  invalidation: { price: number; basis: string; distance_percent: number | null } | null;
   sections: AnalysisSections;
+  data_limits: string[];
+  what_would_change_my_mind: string;
+  monitoring: string[];
 };
 
 /** 规范化后的分析结果（供 API 与 UI 使用）。 */
@@ -29,8 +49,17 @@ export type Analysis = {
   confidence: number;
   reasoning: string;
   priceTarget: number | null;
+  /** 目标价推导路径；为 null 时必须说明缺什么数据（由提示词强制） */
+  priceTargetBasis: string | null;
   timeHorizon: string | null;
+  invalidation: Invalidation | null;
   sections: AnalysisSections;
+  /** 数据边界：本次未提供的数据维度及其对结论的限制 */
+  dataLimits: string[];
+  /** 什么可观察信号会改变该判断 */
+  whatWouldChangeMyMind: string;
+  /** 需持续跟踪的指标与阈值 */
+  monitoring: string[];
 };
 
 /**
@@ -79,6 +108,10 @@ export type AnalysisInput = {
     turnoverRate: number | null;
   };
   indicators: Record<string, unknown>;
+  /** 隐含估值量（由 PE/PB 推导，零外部数据）；缺省表示未计算 */
+  implied?: ImpliedValuation | null;
+  /** 12 项指标的多空一致性统计（用于校准 confidence 上限） */
+  tally?: SignalTally;
   /** 截尾日 K（喂给模型以感知近期形态） */
   klines: Array<{ date: string; open: number; close: number; high: number; low: number; volume: number }>;
 };

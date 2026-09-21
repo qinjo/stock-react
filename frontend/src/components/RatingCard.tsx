@@ -47,6 +47,17 @@ export default function RatingCard({ analysis, model, analyzedAt, fromCache, usa
               目标价 <span className="font-medium text-slate-900">{analysis.priceTarget}</span>
             </span>
           )}
+          {analysis.invalidation && (
+            <span data-testid="invalidation">
+              失效位 <span className="font-medium text-slate-900">{analysis.invalidation.price}</span>
+              {analysis.invalidation.distancePercent !== null && (
+                <span className="ml-1 text-xs text-slate-400">
+                  （{analysis.invalidation.distancePercent > 0 ? "−" : "+"}
+                  {Math.abs(analysis.invalidation.distancePercent).toFixed(2)}%）
+                </span>
+              )}
+            </span>
+          )}
           {analysis.timeHorizon && (
             <span>
               时间窗 <span className="font-medium text-slate-900">{analysis.timeHorizon}</span>
@@ -68,6 +79,17 @@ export default function RatingCard({ analysis, model, analyzedAt, fromCache, usa
       </div>
 
       <p className="mt-3 max-w-4xl text-sm text-slate-800">{analysis.reasoning}</p>
+
+      {analysis.priceTargetBasis && (
+        <p className="mt-2 max-w-4xl text-xs text-slate-500" data-testid="price-target-basis">
+          目标价依据：{analysis.priceTargetBasis}
+        </p>
+      )}
+      {analysis.invalidation && (
+        <p className="mt-1 max-w-4xl text-xs text-slate-500" data-testid="invalidation-basis">
+          失效位依据：{analysis.invalidation.basis}
+        </p>
+      )}
 
       <div className="mt-3 space-y-0.5 text-xs text-slate-400">
         <p>

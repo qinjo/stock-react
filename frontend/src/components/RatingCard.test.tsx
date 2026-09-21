@@ -8,8 +8,13 @@ const analysis: Analysis = {
   confidence: 72,
   reasoning: "估值偏低但趋势尚未反转",
   priceTarget: 1400,
+  priceTargetBasis: "隐含 EPS 71.23 × 合理 PE 19-20",
   timeHorizon: "3-6 个月",
-  sections: { snapshot: "s", fundamentals: "f", technicals: "t", risks: [], conclusion: "c" },
+  invalidation: { price: 1151.01, basis: "近期区间低点", distancePercent: 8.4 },
+  sections: { snapshot: "s", fundamentals: "f", technicals: "t", risks: [] },
+  dataLimits: ["未提供财报明细"],
+  whatWouldChangeMyMind: "站上 SMA50 且 MACD 转正",
+  monitoring: ["MACD 柱是否收敛"],
 };
 
 describe("RatingCard", () => {
@@ -32,7 +37,7 @@ describe("RatingCard", () => {
     expect(screen.getByText("3-6 个月")).toBeInTheDocument();
   });
 
-  it("目标价/时间窗为 null 时不渲染对应字段（而非显示 null）", () => {
+  it("目标价/时间窗为 null 时不渲染数值，但保留依据说明（双轨规则的要求）", () => {
     render(
       <RatingCard
         analysis={{ ...analysis, priceTarget: null, timeHorizon: null }}
@@ -41,9 +46,25 @@ describe("RatingCard", () => {
         fromCache={false}
       />,
     );
-    expect(screen.queryByText(/目标价/)).not.toBeInTheDocument();
+    // 数值字段不渲染
+    expect(screen.queryByText("1400")).not.toBeInTheDocument();
     expect(screen.queryByText(/时间窗/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+    // 但"为什么没有目标价"必须说明（这是新 schema 的双轨要求）
+    expect(screen.getByTestId("price-target-basis")).toBeInTheDocument();
+    expect(screen.queryByText(/null|undefined/)).not.toBeInTheDocument();
+  });
+
+  it("展示判断失效位与其依据（结论可执行）", () => {
+    render(
+      <RatingCard
+        analysis={analysis}
+        model="deepseek-chat"
+        analyzedAt="2026-08-30T10:00:00.000Z"
+        fromCache={false}
+      />,
+    );
+    expect(screen.getByTestId("invalidation")).toHaveTextContent("1151.01");
+    expect(screen.getByTestId("invalidation-basis")).toHaveTextContent("近期区间低点");
   });
 
   it("展示模型、时间与缓存标记（结果可溯源）", () => {
