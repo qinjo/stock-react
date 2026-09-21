@@ -90,7 +90,7 @@ describe("GET /api/analyze", () => {
   it("正常链路返回结构化分析（fake LLM，不触网）", async () => {
     vi.mocked(fetchQuote).mockResolvedValue(quote);
     vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
-    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis });
 
     const app = buildApp({ chat, model: "deepseek-chat" });
     const res = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
@@ -106,7 +106,7 @@ describe("GET /api/analyze", () => {
   it("数据不足时返回 400 INSUFFICIENT_DATA（abstain 契约，不强行给结论）", async () => {
     vi.mocked(fetchQuote).mockResolvedValue(quote);
     vi.mocked(fetchKline).mockResolvedValue(makeKlines(10));
-    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis });
 
     const app = buildApp({ chat });
     const res = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
@@ -131,7 +131,7 @@ describe("GET /api/analyze", () => {
   it("只向提示词喂入 60 根截尾日 K（指标用全量 250 根）", async () => {
     vi.mocked(fetchQuote).mockResolvedValue(quote);
     vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
-    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis });
 
     const app = buildApp({ chat });
     await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
@@ -165,7 +165,7 @@ describe("/api/analyze 缓存（同票重复查询）", () => {
   it("同一股票连续两次查询：第二次命中缓存、LLM 只调用一次", async () => {
     vi.mocked(fetchQuote).mockResolvedValue(quote);
     vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
-    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis });
 
     const app = buildApp({ chat, model: "deepseek-chat", cacheTtlMs: 60_000 });
 
@@ -180,7 +180,7 @@ describe("/api/analyze 缓存（同票重复查询）", () => {
   it("TTL 极短时第二次查询会重新调用 LLM", async () => {
     vi.mocked(fetchQuote).mockResolvedValue(quote);
     vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
-    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis });
 
     const app = buildApp({ chat, model: "deepseek-chat", cacheTtlMs: 1 });
 
@@ -189,5 +189,33 @@ describe("/api/analyze 缓存（同票重复查询）", () => {
     await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
 
     expect(chat).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("/api/analyze 的 token 用量透传", () => {
+  const usage = { promptTokens: 2686, completionTokens: 612, totalTokens: 3298, cachedTokens: 2432 };
+
+  it("响应携带 usage，供前端展示成本", async () => {
+    vi.mocked(fetchQuote).mockResolvedValue(quote);
+    vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis, usage });
+
+    const app = buildApp({ chat, model: "deepseek-chat" });
+    const res = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+
+    expect(res.json().usage).toEqual(usage);
+  });
+
+  it("缓存命中时仍回传 usage（前端展示首次消耗）", async () => {
+    vi.mocked(fetchQuote).mockResolvedValue(quote);
+    vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: goodAnalysis, usage });
+
+    const app = buildApp({ chat, model: "deepseek-chat", cacheTtlMs: 60_000 });
+    await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+    const second = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+
+    expect(second.json().fromCache).toBe(true);
+    expect(second.json().usage).toEqual(usage);
   });
 });

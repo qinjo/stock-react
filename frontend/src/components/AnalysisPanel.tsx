@@ -100,6 +100,7 @@ export default function AnalysisPanel({ code, name }: Props) {
             model={state.data.model}
             analyzedAt={state.data.analyzedAt}
             fromCache={state.data.fromCache}
+            usage={state.data.usage}
           />
           <AnalysisReport sections={state.data.analysis.sections} />
           <p className="text-xs text-slate-400">数据截至：{state.data.input.dataDate}</p>

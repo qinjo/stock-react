@@ -1,4 +1,4 @@
-import { RATING_LABELS, type Analysis } from "../types";
+import { RATING_LABELS, type Analysis, type TokenUsage } from "../types";
 
 /** 评级配色：遵循 A 股习惯（偏多=红，偏空=绿，中性=灰）。 */
 const RATING_STYLE: Record<string, { badge: string; bar: string }> = {
@@ -14,10 +14,16 @@ type Props = {
   model: string;
   analyzedAt: string;
   fromCache: boolean;
+  usage?: TokenUsage;
 };
 
+/** 千分位格式化 token 数。 */
+function fmtTokens(n: number): string {
+  return n.toLocaleString("zh-CN");
+}
+
 /** 信号卡：评级 + 置信度 + 一句话理由 + 可选目标价/时间窗 + 溯源信息。 */
-export default function RatingCard({ analysis, model, analyzedAt, fromCache }: Props) {
+export default function RatingCard({ analysis, model, analyzedAt, fromCache, usage }: Props) {
   const style = RATING_STYLE[analysis.rating] ?? RATING_STYLE.hold!;
 
   return (
@@ -63,10 +69,19 @@ export default function RatingCard({ analysis, model, analyzedAt, fromCache }: P
 
       <p className="mt-3 text-sm text-slate-800">{analysis.reasoning}</p>
 
-      <p className="mt-3 text-xs text-slate-400">
-        {model} · {new Date(analyzedAt).toLocaleString("zh-CN")}
-        {fromCache && " · 命中缓存"}
-      </p>
+      <div className="mt-3 space-y-0.5 text-xs text-slate-400">
+        <p>
+          {model} · {new Date(analyzedAt).toLocaleString("zh-CN")}
+          {fromCache && " · 命中缓存（零 LLM 调用）"}
+        </p>
+        {usage && (
+          <p data-testid="token-usage">
+            本次消耗 {fmtTokens(usage.totalTokens)} tokens（输入 {fmtTokens(usage.promptTokens)} /
+            输出 {fmtTokens(usage.completionTokens)}
+            {usage.cachedTokens ? `，其中 ${fmtTokens(usage.cachedTokens)} 命中提示词缓存` : ""}）
+          </p>
+        )}
+      </div>
     </section>
   );
 }

@@ -74,3 +74,38 @@ describe("RatingCard", () => {
     }
   });
 });
+
+describe("RatingCard 的 token 用量展示", () => {
+  const base = { analysis, model: "deepseek-chat", analyzedAt: "2026-08-30T10:00:00.000Z" };
+
+  it("展示总用量与输入/输出明细（千分位）", () => {
+    render(
+      <RatingCard
+        {...base}
+        fromCache={false}
+        usage={{ promptTokens: 2686, completionTokens: 612, totalTokens: 3298, cachedTokens: 2432 }}
+      />,
+    );
+    const usageLine = screen.getByTestId("token-usage");
+    expect(usageLine).toHaveTextContent("3,298 tokens");
+    expect(usageLine).toHaveTextContent("输入 2,686");
+    expect(usageLine).toHaveTextContent("输出 612");
+  });
+
+  it("有缓存命中 token 时额外说明（成本更低）", () => {
+    render(
+      <RatingCard
+        {...base}
+        fromCache={false}
+        usage={{ promptTokens: 2686, completionTokens: 612, totalTokens: 3298, cachedTokens: 2432 }}
+      />,
+    );
+    expect(screen.getByTestId("token-usage")).toHaveTextContent("2,432 命中提示词缓存");
+  });
+
+  it("用量缺失时不渲染该行（不显示 0 或 undefined）", () => {
+    render(<RatingCard {...base} fromCache={false} />);
+    expect(screen.queryByTestId("token-usage")).not.toBeInTheDocument();
+    expect(screen.queryByText(/undefined|NaN/)).not.toBeInTheDocument();
+  });
+});

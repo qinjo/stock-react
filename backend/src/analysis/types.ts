@@ -40,8 +40,25 @@ export type Analysis = {
  * 否则会污染信号语义（看空 ≠ 无法判断）。
  */
 export type AnalysisOutcome =
-  | { status: "ok"; analysis: Analysis; model: string; analyzedAt: string; fromCache: boolean }
+  | {
+      status: "ok";
+      analysis: Analysis;
+      model: string;
+      analyzedAt: string;
+      fromCache: boolean;
+      /** 本次（或首次分析时）的 token 用量；数据源未返回时为 undefined */
+      usage?: TokenUsage;
+    }
   | { status: "abstained"; reason: string; detail: string };
+
+/** LLM 调用的 token 用量（用于成本可观测）。 */
+export type TokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** 命中服务端提示词缓存的输入 token（DeepSeek 自动缓存，计价更低） */
+  cachedTokens?: number;
+};
 
 /** 分析输入：冻结的确定性域对象（不触网，便于测试与缓存指纹）。 */
 export type AnalysisInput = {

@@ -2,13 +2,14 @@ import { buildAnalysisPrompt } from "./prompt.js";
 import { parseAnalysis } from "./parse.js";
 import { PromptCache } from "../cache.js";
 import type { ChatFn } from "./llm.js";
-import type { Analysis, AnalysisInput, AnalysisOutcome } from "./types.js";
+import type { Analysis, AnalysisInput, AnalysisOutcome, TokenUsage } from "./types.js";
 
 /** 缓存中保存的分析快照（含首次分析时间，命中时如实回传）。 */
 export type CachedAnalysis = {
   analysis: Analysis;
   model: string;
   analyzedAt: string;
+  usage?: TokenUsage;
 };
 
 export type RunAnalysisDeps = {
@@ -24,7 +25,7 @@ export type RunAnalysisDeps = {
 };
 
 /**
- * 编排一次分析：构造提示词 → 查缓存 → 调用 LLM → 解析。
+ * 编排一次分析：查缓存 → 构造提示词 → 调用 LLM → 解析。
  *
  * 失败契约（调研笔记核心教训）：调用或解析失败 → 重试一次 → 仍失败则 **abstain**，
  * 绝不静默降级为「中性」结论（看空 ≠ 无法判断会污染信号语义）。
@@ -35,7 +36,9 @@ export async function runAnalysis(
   deps: RunAnalysisDeps,
 ): Promise<AnalysisOutcome> {
   const prompt = buildAnalysisPrompt(input);
-  const cacheKey = PromptCache.keyFor(prompt.system, prompt.user);
+  // 键取「股票 + 交易日」而非提示词全文哈希：盘中行情逐秒变化会让全文哈希永不命中
+  // （详见 cache.ts 的键设计说明）
+  const cacheKey = PromptCache.keyFor(input.code, input.dataDate);
 
   const cached = deps.cache?.get(cacheKey);
   if (cached) {
@@ -45,6 +48,7 @@ export async function runAnalysis(
       model: cached.model,
       analyzedAt: cached.analyzedAt,
       fromCache: true,
+      usage: cached.usage,
     };
   }
 
@@ -53,11 +57,11 @@ export async function runAnalysis(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const text = await deps.chat(prompt);
-      const analysis = parseAnalysis(text);
+      const { content, usage } = await deps.chat(prompt);
+      const analysis = parseAnalysis(content);
       const analyzedAt = (deps.now?.() ?? new Date()).toISOString();
-      deps.cache?.set(cacheKey, { analysis, model: deps.model, analyzedAt });
-      return { status: "ok", analysis, model: deps.model, analyzedAt, fromCache: false };
+      deps.cache?.set(cacheKey, { analysis, model: deps.model, analyzedAt, usage });
+      return { status: "ok", analysis, model: deps.model, analyzedAt, fromCache: false, usage };
     } catch (err) {
       lastDetail = err instanceof Error ? err.message : String(err);
     }

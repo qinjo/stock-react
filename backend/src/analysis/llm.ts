@@ -1,8 +1,16 @@
+import type { TokenUsage } from "./types.js";
+
 /** 一次对话请求：system 稳定（可命中提示词缓存），user 承载数据。 */
 export type ChatRequest = { system: string; user: string };
 
+/** 一次对话的结果：正文 + 可选 token 用量。 */
+export type ChatResult = {
+  content: string;
+  usage?: TokenUsage;
+};
+
 /** 对话函数签名 —— 抽象成类型，便于测试注入 fake LLM（主 seam）。 */
-export type ChatFn = (req: ChatRequest) => Promise<string>;
+export type ChatFn = (req: ChatRequest) => Promise<ChatResult>;
 
 /** LLM 调用失败（网络/鉴权/额度等）。 */
 export class LlmError extends Error {
@@ -72,7 +80,30 @@ export function createDeepSeekChat(config: DeepSeekConfig): ChatFn {
 
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        prompt_cache_hit_tokens?: number;
+      };
     };
-    return data.choices?.[0]?.message?.content ?? "";
+
+    const content = data.choices?.[0]?.message?.content ?? "";
+    const usage = data.usage;
+    return {
+      content,
+      // 用量缺失时保持 undefined，不伪造 0（前端据此决定是否展示）
+      usage:
+        usage && typeof usage.total_tokens === "number"
+          ? {
+              promptTokens: usage.prompt_tokens ?? 0,
+              completionTokens: usage.completion_tokens ?? 0,
+              totalTokens: usage.total_tokens,
+              ...(typeof usage.prompt_cache_hit_tokens === "number"
+                ? { cachedTokens: usage.prompt_cache_hit_tokens }
+                : {}),
+            }
+          : undefined,
+    };
   };
 }

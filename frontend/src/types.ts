@@ -98,11 +98,22 @@ export type Analysis = {
   sections: AnalysisSections;
 };
 
+/** LLM 调用的 token 用量（成本可观测）。 */
+export type TokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** 命中 DeepSeek 服务端提示词缓存的输入 token（计价更低） */
+  cachedTokens?: number;
+};
+
 export type AnalyzeResponse = {
   status: "ok";
   analysis: Analysis;
   model: string;
   analyzedAt: string;
   fromCache: boolean;
+  /** 数据源未返回用量时缺省，UI 据此决定是否展示 */
+  usage?: TokenUsage;
   input: { code: string; name: string; dataDate: string };
 };

@@ -45,7 +45,7 @@ const fixedNow = () => new Date("2026-08-30T10:00:00.000Z");
 
 describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
   it("夹具①干净 JSON：返回 ok 与结构化信号", async () => {
-    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
 
     const out = await runAnalysis(input, { chat, model: "deepseek-chat", now: fixedNow });
 
@@ -62,7 +62,9 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
   it("夹具②杂散文本：经三级回退仍解析成功", async () => {
     const chat: ChatFn = vi
       .fn()
-      .mockResolvedValue(`好的，以下是分析结果：\n\`\`\`json\n${cleanJson}\n\`\`\`\n希望对你有帮助。`);
+      .mockResolvedValue({
+        content: `好的，以下是分析结果：\n\`\`\`json\n${cleanJson}\n\`\`\`\n希望对你有帮助。`,
+      });
 
     const out = await runAnalysis(input, { chat, model: "deepseek-chat" });
 
@@ -72,8 +74,8 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
   });
 
   it("夹具③空值字符串：可选字段落为 null 而非字符串", async () => {
-    const chat: ChatFn = vi.fn().mockResolvedValue(
-      JSON.stringify({
+    const chat: ChatFn = vi.fn().mockResolvedValue({
+      content: JSON.stringify({
         rating: "hold",
         confidence: 50,
         reasoning: "证据不足",
@@ -81,7 +83,7 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
         time_horizon: "None",
         sections: { risks: "-" },
       }),
-    );
+    });
 
     const out = await runAnalysis(input, { chat, model: "deepseek-chat" });
 
@@ -108,7 +110,7 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
     const chat: ChatFn = vi
       .fn()
       .mockRejectedValueOnce(new Error("偶发超时"))
-      .mockResolvedValueOnce(cleanJson);
+      .mockResolvedValueOnce({ content: cleanJson });
 
     const out = await runAnalysis(input, { chat, model: "deepseek-chat" });
 
@@ -117,7 +119,7 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
   });
 
   it("评级枚举非法：重试后仍失败则 abstain", async () => {
-    const chat: ChatFn = vi.fn().mockResolvedValue('{"rating":"strong_buy","confidence":90}');
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: '{"rating":"strong_buy","confidence":90}' });
 
     const out = await runAnalysis(input, { chat, model: "deepseek-chat" });
 
@@ -140,7 +142,7 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
 describe("runAnalysis 缓存行为（提示词哈希 + TTL）", () => {
   it("第二次相同输入命中缓存，不再调用 LLM 并标记 fromCache", async () => {
     const cache = new PromptCache<CachedAnalysis>(60_000);
-    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
 
     const first = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
     const second = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
@@ -154,15 +156,38 @@ describe("runAnalysis 缓存行为（提示词哈希 + TTL）", () => {
     }
   });
 
-  it("数据变化（价格不同）导致提示词哈希变化，缓存不命中", async () => {
+  it("同一交易日内价格微幅波动仍命中缓存（盘中 tick 不应让缓存永不命中）", async () => {
     const cache = new PromptCache<CachedAnalysis>(60_000);
-    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
 
     await runAnalysis(input, { chat, model: "deepseek-chat", cache });
     await runAnalysis(
       { ...input, quote: { ...input.quote, price: input.quote.price! + 1 } },
       { chat, model: "deepseek-chat", cache },
     );
+
+    expect(chat).toHaveBeenCalledTimes(1); // 仍复用，避免每次查询都真实调用
+  });
+
+  it("跨交易日（dataDate 变化）缓存失效，绝不返回隔日结论", async () => {
+    const cache = new PromptCache<CachedAnalysis>(60_000);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
+
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    await runAnalysis(
+      { ...input, dataDate: "2026-09-19" },
+      { chat, model: "deepseek-chat", cache },
+    );
+
+    expect(chat).toHaveBeenCalledTimes(2);
+  });
+
+  it("不同股票互不串用缓存", async () => {
+    const cache = new PromptCache<CachedAnalysis>(60_000);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
+
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    await runAnalysis({ ...input, code: "000001" }, { chat, model: "deepseek-chat", cache });
 
     expect(chat).toHaveBeenCalledTimes(2);
   });
@@ -173,7 +198,7 @@ describe("runAnalysis 缓存行为（提示词哈希 + TTL）", () => {
 
     await runAnalysis(input, { chat, model: "deepseek-chat", cache });
     // 故障恢复后应能正常分析，而不是命中失败缓存
-    vi.mocked(chat).mockResolvedValue(cleanJson);
+    vi.mocked(chat).mockResolvedValue({ content: cleanJson });
     const out = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
 
     expect(out.status).toBe("ok");
@@ -183,12 +208,48 @@ describe("runAnalysis 缓存行为（提示词哈希 + TTL）", () => {
   it("缓存过期后重新调用 LLM", async () => {
     let now = 0;
     const cache = new PromptCache<CachedAnalysis>(1000, 200, () => now);
-    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
 
     await runAnalysis(input, { chat, model: "deepseek-chat", cache });
     now += 1001;
     await runAnalysis(input, { chat, model: "deepseek-chat", cache });
 
     expect(chat).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runAnalysis 透传 token 用量（成本可观测）", () => {
+  const usage = { promptTokens: 2686, completionTokens: 612, totalTokens: 3298, cachedTokens: 2432 };
+
+  it("结果携带 LLM 返回的 usage", async () => {
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson, usage });
+
+    const out = await runAnalysis(input, { chat, model: "deepseek-chat" });
+
+    expect(out.status).toBe("ok");
+    if (out.status !== "ok") throw new Error("unreachable");
+    expect(out.usage).toEqual(usage);
+  });
+
+  it("缓存命中时回传首次的 usage，而不是 undefined", async () => {
+    const cache = new PromptCache<CachedAnalysis>(60_000);
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson, usage });
+
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    const second = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+
+    expect(second.status).toBe("ok");
+    if (second.status !== "ok") throw new Error("unreachable");
+    expect(second.fromCache).toBe(true);
+    expect(second.usage).toEqual(usage);
+  });
+
+  it("LLM 未返回 usage 时为 undefined（不伪造 0）", async () => {
+    const chat: ChatFn = vi.fn().mockResolvedValue({ content: cleanJson });
+
+    const out = await runAnalysis(input, { chat, model: "deepseek-chat" });
+
+    if (out.status !== "ok") throw new Error("unreachable");
+    expect(out.usage).toBeUndefined();
   });
 });
