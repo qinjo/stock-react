@@ -1,7 +1,19 @@
 # A股智能分析 MVP —— 功能规格
 
-> 状态：`ready-for-agent` — 已发布为 GitHub issue [#1](https://github.com/qinjo/stock-react/issues/1)（qinjo/stock-react）
+> 状态：**已实现并验证**（T1–T6 全部完成；原始规格发布于 GitHub issue [#1](https://github.com/qinjo/stock-react/issues/1)）
 > 依据：本轮设计树（grilling）共识 + 两份调研笔记（[开源LLM金融分析项目调研笔记](../_research/开源LLM金融分析项目调研笔记.md)、[free-stock-api-research.md](../free-stock-api-research.md)）。
+
+> ### ⚠️ 实现后的演进（本规格未覆盖的后续优化，以此为准）
+>
+> 本文档保留为**原始规格**。实现过程中有三项决策已被后续 ADR 取代或扩展，阅读本文的"Implementation Decisions"时请对照：
+>
+> | 本文档原文 | 实际实现 | 依据 |
+> |---|---|---|
+> | 「东财单源 + 缓存」 | 行情**东财主 + 腾讯备自动降级**；搜索改用腾讯 smartbox | [ADR-0001](adr/0001-data-source-strategy.md) |
+> | LLM 输出含 `sections.conclusion`、置信度为主观锚定、目标价可选无约束 | **删除 `conclusion`**（改为 data_limits / what_would_change_my_mind / monitoring）；置信度由代码算出的**一致性上限**约束；目标价**双轨制**（有锚给推导，无锚须说明缺什么）；新增 `invalidation` 失效位 | [ADR-0002](adr/0002-prompt-engineering.md) |
+> | 输入仅行情 + 派生指标 + 日 K | 增加**财报主指标、历史估值分位、同业对比、隐含估值量** | [ADR-0003](adr/0003-fundamentals-data.md) |
+>
+> 另新增调研笔记：[提示词优化调研笔记](../_research/提示词优化调研笔记.md)（8 个项目源码级）、[基本面数据接口调研笔记](../_research/基本面数据接口调研笔记.md)（773 行 curl 实测）。
 
 ---
 
