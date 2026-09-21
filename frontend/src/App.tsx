@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import AnalysisPanel from "./components/AnalysisPanel";
 import KlineChart from "./components/KlineChart";
 import QuoteCard from "./components/QuoteCard";
 import SearchBox from "./components/SearchBox";
 import { getKline, getQuote } from "./api";
 import { ApiError, type ApiErrorCode, type Kline, type Quote, type SearchCandidate } from "./types";
 
-type Health = { status: string; service: string; time: string };
+type Health = { status: string; service: string; time: string; analysisReady?: boolean };
 
 /** 已选股票的取数状态机。 */
 type StockState =
@@ -104,11 +105,21 @@ export default function App() {
           <>
             <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
             <KlineChart klines={stock.klines} symbol={stock.candidate.code} />
+            {/* key 确保换股票时分析状态重置 */}
+            <AnalysisPanel
+              key={stock.candidate.code}
+              code={stock.candidate.code}
+              name={stock.candidate.name}
+            />
           </>
         )}
       </main>
 
-      <footer className="mx-auto max-w-3xl px-6 pb-8 text-xs text-slate-400">
+      <footer className="mx-auto max-w-3xl space-y-2 px-6 pb-8 text-xs text-slate-400">
+        <p className="rounded border border-slate-200 bg-white px-3 py-2 text-slate-500">
+          ⚠️ 本页所有分析由 AI 生成，仅供学习与研究参考，<strong>不构成任何投资建议</strong>。
+          数据来自公开免费接口，可能存在延迟或错误，请以交易所披露为准。
+        </p>
         {backendError ? (
           <span className="text-red-500" role="alert">
             无法连接后端：{backendError}
@@ -116,6 +127,7 @@ export default function App() {
         ) : health ? (
           <span>
             {health.service} · {health.status}
+            {health.analysisReady === false && " · 分析未就绪（未配置 API key）"}
           </span>
         ) : (
           <span>检测后端状态…</span>

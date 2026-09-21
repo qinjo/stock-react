@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { fetchKline, fetchQuote } from "../datasource.js";
 import { computeIndicators, InsufficientDataError } from "../indicators.js";
-import { runAnalysis } from "../analysis/index.js";
+import { runAnalysis, type CachedAnalysis } from "../analysis/index.js";
+import type { PromptCache } from "../cache.js";
 import type { ChatFn } from "../analysis/llm.js";
 import type { AnalysisInput } from "../analysis/types.js";
 import { ApiError } from "../errors.js";
@@ -15,6 +16,8 @@ export type AnalyzeDeps = {
   /** 对话函数；未配置（缺 API key）时为 null */
   chat: ChatFn | null;
   model: string;
+  /** 提示词哈希缓存（TTL 由 app 层配置） */
+  cache?: PromptCache<CachedAnalysis>;
 };
 
 /** 组装分析输入：行情+指标+截尾 K 线，冻结为确定性域对象。 */
@@ -86,7 +89,11 @@ export async function analyzeRoutes(app: FastifyInstance, deps: AnalyzeDeps): Pr
       throw new ApiError("SOURCE_UNAVAILABLE", "行情数据源暂时不可用", 502);
     }
 
-    const outcome = await runAnalysis(input, { chat: deps.chat, model: deps.model });
+    const outcome = await runAnalysis(input, {
+      chat: deps.chat,
+      model: deps.model,
+      cache: deps.cache,
+    });
 
     if (outcome.status === "abstained") {
       // 数据不足与调用失败要可区分（abstain 契约）

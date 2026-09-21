@@ -160,3 +160,34 @@ describe("GET /api/analyze", () => {
     }
   });
 });
+
+describe("/api/analyze 缓存（同票重复查询）", () => {
+  it("同一股票连续两次查询：第二次命中缓存、LLM 只调用一次", async () => {
+    vi.mocked(fetchQuote).mockResolvedValue(quote);
+    vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
+    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+
+    const app = buildApp({ chat, model: "deepseek-chat", cacheTtlMs: 60_000 });
+
+    const first = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+    const second = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+
+    expect(first.json().fromCache).toBe(false);
+    expect(second.json().fromCache).toBe(true);
+    expect(chat).toHaveBeenCalledTimes(1);
+  });
+
+  it("TTL 极短时第二次查询会重新调用 LLM", async () => {
+    vi.mocked(fetchQuote).mockResolvedValue(quote);
+    vi.mocked(fetchKline).mockResolvedValue(makeKlines(250));
+    const chat: ChatFn = vi.fn().mockResolvedValue(goodAnalysis);
+
+    const app = buildApp({ chat, model: "deepseek-chat", cacheTtlMs: 1 });
+
+    await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+    await new Promise((r) => setTimeout(r, 5));
+    await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+  });
+});

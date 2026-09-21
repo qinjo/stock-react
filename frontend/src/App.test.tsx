@@ -147,3 +147,34 @@ describe("App 选股到行情展示的完整路径", () => {
     });
   });
 });
+
+describe("App 的 T5 集成：分析入口与合规", () => {
+  it("选中股票后出现分析入口，且免责声明常驻", async () => {
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("股票代码 / 名称"), "茅台");
+    await userEvent.click(await screen.findByRole("option", { name: /贵州茅台/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "开始 AI 分析" })).toBeInTheDocument();
+    });
+    expect(screen.getByText(/不构成任何投资建议/)).toBeInTheDocument();
+  });
+
+  it("首屏即展示免责声明（无需先查询）", () => {
+    render(<App />);
+    expect(screen.getByText(/不构成任何投资建议/)).toBeInTheDocument();
+  });
+
+  it("后端未配置 API key 时页脚给出提示", async () => {
+    stubRoutes([
+      ["/api/health", { ...health, analysisReady: false }],
+      ["/api/search", { candidates }],
+      ["/api/quote", { quote }],
+      ["/api/kline", { klines }],
+    ]);
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText(/分析未就绪/)).toBeInTheDocument();
+    });
+  });
+});

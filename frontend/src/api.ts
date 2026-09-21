@@ -1,4 +1,11 @@
-import { ApiError, type ApiErrorBody, type Kline, type Quote, type SearchCandidate } from "./types";
+import {
+  ApiError,
+  type AnalyzeResponse,
+  type ApiErrorBody,
+  type Kline,
+  type Quote,
+  type SearchCandidate,
+} from "./types";
 
 async function request<T>(url: string): Promise<T> {
   let res: Response;
@@ -40,4 +47,11 @@ export function getKline(code: string, limit = 60): Promise<Kline[]> {
   return request<{ klines: Kline[] }>(
     `/api/kline?code=${encodeURIComponent(code)}&limit=${limit}`,
   ).then((d) => d.klines);
+}
+
+/* ------------------------------ 分析（T5） ------------------------------ */
+
+/** 请求 AI 分析。数据不足/分析失败会以 ApiError(code) 抛出，由 UI 分流展示。 */
+export function getAnalysis(code: string): Promise<AnalyzeResponse> {
+  return request<AnalyzeResponse>(`/api/analyze?code=${encodeURIComponent(code)}`);
 }

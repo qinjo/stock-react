@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { runAnalysis } from "../src/analysis/index.js";
+import { runAnalysis, type CachedAnalysis } from "../src/analysis/index.js";
+import { PromptCache } from "../src/cache.js";
 import type { ChatFn } from "../src/analysis/llm.js";
 import type { AnalysisInput } from "../src/analysis/types.js";
 
@@ -133,5 +134,61 @@ describe("runAnalysis 主 seam（fake LLM，永不触网）", () => {
 
     expect(out.status).toBe("abstained");
     expect(chat).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("runAnalysis 缓存行为（提示词哈希 + TTL）", () => {
+  it("第二次相同输入命中缓存，不再调用 LLM 并标记 fromCache", async () => {
+    const cache = new PromptCache<CachedAnalysis>(60_000);
+    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+
+    const first = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    const second = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+
+    expect(chat).toHaveBeenCalledTimes(1); // 第二次零调用
+    expect(first.status === "ok" && first.fromCache).toBe(false);
+    expect(second.status === "ok" && second.fromCache).toBe(true);
+    // 命中时回传首次的分析时间，便于前端诚实展示
+    if (first.status === "ok" && second.status === "ok") {
+      expect(second.analyzedAt).toBe(first.analyzedAt);
+    }
+  });
+
+  it("数据变化（价格不同）导致提示词哈希变化，缓存不命中", async () => {
+    const cache = new PromptCache<CachedAnalysis>(60_000);
+    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    await runAnalysis(
+      { ...input, quote: { ...input.quote, price: input.quote.price! + 1 } },
+      { chat, model: "deepseek-chat", cache },
+    );
+
+    expect(chat).toHaveBeenCalledTimes(2);
+  });
+
+  it("abstain 结果不写缓存（偶发失败不应在 TTL 内被持续复用）", async () => {
+    const cache = new PromptCache<CachedAnalysis>(60_000);
+    const chat: ChatFn = vi.fn().mockRejectedValue(new Error("瞬时故障"));
+
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    // 故障恢复后应能正常分析，而不是命中失败缓存
+    vi.mocked(chat).mockResolvedValue(cleanJson);
+    const out = await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+
+    expect(out.status).toBe("ok");
+    expect(cache.stats().size).toBe(1);
+  });
+
+  it("缓存过期后重新调用 LLM", async () => {
+    let now = 0;
+    const cache = new PromptCache<CachedAnalysis>(1000, 200, () => now);
+    const chat: ChatFn = vi.fn().mockResolvedValue(cleanJson);
+
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+    now += 1001;
+    await runAnalysis(input, { chat, model: "deepseek-chat", cache });
+
+    expect(chat).toHaveBeenCalledTimes(2);
   });
 });

@@ -3,6 +3,8 @@ import { ApiError } from "./errors.js";
 import { dataRoutes } from "./routes/data.js";
 import { analyzeRoutes } from "./routes/analyze.js";
 import { DEFAULT_MODEL, createDeepSeekChat, type ChatFn } from "./analysis/llm.js";
+import type { CachedAnalysis } from "./analysis/index.js";
+import { PromptCache } from "./cache.js";
 
 export type BuildAppOptions = {
   /** 测试注入 fake LLM；生产从此处之外的默认行为创建 */
@@ -10,6 +12,8 @@ export type BuildAppOptions = {
   model?: string;
   /** 显式传入 API key（默认读 DEEPSEEK_API_KEY） */
   apiKey?: string;
+  /** 分析缓存 TTL（毫秒）；默认 10 分钟，可用 ANALYSIS_CACHE_TTL_MS 覆盖 */
+  cacheTtlMs?: number;
 };
 
 /**
@@ -34,8 +38,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     };
   });
 
+  const cacheTtlMs =
+    options.cacheTtlMs ?? Number(process.env.ANALYSIS_CACHE_TTL_MS ?? 10 * 60 * 1000);
+  const cache = new PromptCache<CachedAnalysis>(
+    Number.isFinite(cacheTtlMs) && cacheTtlMs > 0 ? cacheTtlMs : 10 * 60 * 1000,
+  );
+
   app.register(dataRoutes);
-  app.register(async (instance) => analyzeRoutes(instance, { chat, model }));
+  app.register(async (instance) => analyzeRoutes(instance, { chat, model, cache }));
 
   // 统一错误形状：{ status, code, message }
   app.setErrorHandler((err: FastifyError, _req, reply) => {

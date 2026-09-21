@@ -66,3 +66,42 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+/* ------------------------------ 分析（T5） ------------------------------ */
+
+export type Rating = "buy" | "overweight" | "hold" | "underweight" | "sell";
+
+/** 5 档评级的中文展示名。 */
+export const RATING_LABELS: Record<Rating, string> = {
+  buy: "买入",
+  overweight: "增持",
+  hold: "持有",
+  underweight: "减持",
+  sell: "卖出",
+};
+
+export type AnalysisSections = {
+  snapshot: string;
+  fundamentals: string;
+  technicals: string;
+  risks: string[];
+  conclusion: string;
+};
+
+export type Analysis = {
+  rating: Rating;
+  confidence: number;
+  reasoning: string;
+  priceTarget: number | null;
+  timeHorizon: string | null;
+  sections: AnalysisSections;
+};
+
+export type AnalyzeResponse = {
+  status: "ok";
+  analysis: Analysis;
+  model: string;
+  analyzedAt: string;
+  fromCache: boolean;
+  input: { code: string; name: string; dataDate: string };
+};
