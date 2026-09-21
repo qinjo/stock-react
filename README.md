@@ -14,7 +14,8 @@
 - **派生技术指标**：SMA50/200、RSI14、MACD(DIF/DEA/HIST)、ATR14、20/60 日涨跌幅、20 日年化波动率、区间位置等约 12 项
 - **AI 分析**：5 档评级 + 0-100 置信度 + 目标价/时间窗 + 五节报告（快照 / 基本面 / 技术面 / 风险清单 / 结论）
 - **异常契约**：区分「数据不足」「分析失败」「数据源不可用」三态，数据不足时明确 abstain 而非硬凑结论
-- **缓存**：提示词哈希缓存（TTL 默认 10 分钟），同票重复查询零 LLM 调用
+- **缓存**：以「股票 + 交易日」为键的分析缓存（TTL 默认 10 分钟），同票重复查询零 LLM 调用，跨交易日自动失效
+- **成本可观测**：每次分析在信号卡上显示真实 token 用量（输入/输出/命中缓存部分）
 
 ## 架构
 
@@ -29,7 +30,7 @@
    ├── eastmoney.ts         东财适配器（字段 ×100 缩放、K线列序、secid 解析）
    ├── tencent.ts           腾讯适配器（GBK 解码、市值/成交额单位换算、搜索）
    ├── indicators.ts        派生指标（technicalindicators；纯函数）
-   ├── cache.ts             提示词哈希缓存（sha256 + TTL）
+   ├── cache.ts             分析缓存（键=股票+交易日，TTL 可配）
    ├── rate-limit.ts        按 IP 限流（公开部署时启用）
    └── analysis/
         ├── prompt.ts       六段 persona 提示词构造器
@@ -79,7 +80,7 @@ npm run dev                 # http://localhost:5173
 | `GET /api/quote?code=` | 实时快照 |
 | `GET /api/kline?code=&limit=60` | 日 K（前复权，limit 上限 500） |
 | `GET /api/indicators?code=&limit=250` | 派生技术指标 |
-| `GET /api/analyze?code=` | 完整 AI 分析（含缓存） |
+| `GET /api/analyze?code=` | 完整 AI 分析（含缓存），响应带 `usage` token 用量 |
 
 **统一错误形状**（前端按 `code` 分流展示）：
 
@@ -108,6 +109,8 @@ npm run dev                 # http://localhost:5173
 - **不让模型做算术**：均线、RSI、MACD、波动率等全部由 `indicators.ts` 算好喂入
 - **点时间对齐**：快照、指标、K 线各自标注数据日期；提示词以数据截至日为「今天」
 - **abstain 与失败可区分**：解析失败重试一次后进入 abstain，绝不静默降级为「中性」（看空 ≠ 无法判断）
+
+一个值得记录的坑：缓存键**不能用提示词全文哈希**。ai-hedge-fund 那样做是因为其输入是季度财报（期内稳定）；本项目输入含实时行情，盘中价格逐秒变化会让全文哈希永不命中，每次查询都真实调用 LLM。故改为「股票 + 交易日」——同交易日复用，跨交易日失效。
 
 解析层做了三级回退（代码块 → 整串 → 首个平衡花括号块）与空值兜底（`None`/`N/A`/`-` → `null`），可参考 `backend/src/analysis/parse.ts` 的测试。
 
