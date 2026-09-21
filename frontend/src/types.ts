@@ -44,6 +44,7 @@ export type Kline = {
 
 export type ApiErrorCode =
   | "INVALID_INPUT"
+  | "RATE_LIMITED"
   | "NOT_FOUND"
   | "SOURCE_UNAVAILABLE"
   | "INSUFFICIENT_DATA"

@@ -5,6 +5,7 @@ import { analyzeRoutes } from "./routes/analyze.js";
 import { DEFAULT_MODEL, createDeepSeekChat, type ChatFn } from "./analysis/llm.js";
 import type { CachedAnalysis } from "./analysis/index.js";
 import { PromptCache } from "./cache.js";
+import { rateLimitFromEnv, registerRateLimit, type RateLimitOptions } from "./rate-limit.js";
 
 export type BuildAppOptions = {
   /** 测试注入 fake LLM；生产从此处之外的默认行为创建 */
@@ -14,6 +15,8 @@ export type BuildAppOptions = {
   apiKey?: string;
   /** 分析缓存 TTL（毫秒）；默认 10 分钟，可用 ANALYSIS_CACHE_TTL_MS 覆盖 */
   cacheTtlMs?: number;
+  /** 限流配置；默认读环境变量（默认关闭） */
+  rateLimit?: RateLimitOptions;
 };
 
 /**
@@ -43,6 +46,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const cache = new PromptCache<CachedAnalysis>(
     Number.isFinite(cacheTtlMs) && cacheTtlMs > 0 ? cacheTtlMs : 10 * 60 * 1000,
   );
+
+  registerRateLimit(app, options.rateLimit ?? rateLimitFromEnv());
 
   app.register(dataRoutes);
   app.register(async (instance) => analyzeRoutes(instance, { chat, model, cache }));

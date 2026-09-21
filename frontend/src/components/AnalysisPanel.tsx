@@ -30,6 +30,7 @@ const ERROR_COPY: Partial<Record<ApiErrorCode, { title: string; hint: string }>>
     hint: "行情数据源限流或断连，请稍后重试。",
   },
   INVALID_INPUT: { title: "股票代码无效", hint: "请检查代码后重试。" },
+  RATE_LIMITED: { title: "请求过于频繁", hint: "服务端已限流，请稍等片刻再试。" },
 };
 
 /** 分析面板：触发分析并渲染信号卡 + 五节报告，带三态异常处理。 */
