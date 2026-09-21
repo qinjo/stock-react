@@ -24,6 +24,7 @@ const SYSTEM_PROMPT = `你是一位严谨的 A 股投研分析师，以长期价
 【推理清单】请按顺序完成，再给结论：
 1. 估值与盈利质量（**本次已提供财报与历史估值分位，必须用上**）：
    - 当前 PE/PB 处于近 3 年、近 5 年的什么分位？「便宜」是否有历史依据？
+   - 相对同行业是贵还是便宜？若「相对自身历史极低、相对同业并不便宜」，说明什么？
    - 用财报数据核对：ROE、毛利率、净利率、资产负债率的最新值与**趋势**（对比历史期间）
    - 营收与净利同比增速是正还是负？低估值是**错杀**（盈利仍增长）还是**盈利下修的定价**（增速转负）？
    - 由 PE/PB 推出的隐含 ROE 与财报实际 ROE 是否互相印证？
@@ -239,6 +240,38 @@ function renderValuation(input: AnalysisInput): string {
   ].join("\n");
 }
 
+/** 渲染同业估值对比（行业内相对贵贱）。 */
+function renderPeers(input: AnalysisInput): string {
+  const p = input.fundamentals?.peers;
+  if (!p) return "（同业对比数据不可用）";
+
+  const lines: string[] = [`行业：${p.industry}（板块共 ${p.peerCount} 只，交易日 ${p.tradeDate}）`];
+
+  if (p.pe) {
+    lines.push(
+      `行业 PE_TTM 中位 ${p.pe.median}（25 分位 ${p.pe.p25}／75 分位 ${p.pe.p75}，区间 ${p.pe.min}–${p.pe.max}，有效样本 ${p.pe.count} 只）`,
+    );
+  }
+  if (p.pb) {
+    lines.push(`行业 PB_MRQ 中位 ${p.pb.median}（有效样本 ${p.pb.count} 只）`);
+  }
+  if (p.peRank !== null && p.cheaperPeers !== null) {
+    lines.push(
+      `本股 PE 在 ${p.peerCount} 只同业中排第 ${p.peRank} 低（有 ${p.cheaperPeers} 只比它更便宜）`,
+    );
+  }
+  if (p.pePremium !== null) {
+    lines.push(
+      `本股 PE 相对行业中位${p.pePremium > 0 ? "溢价" : "折价"} ${Math.abs(p.pePremium)}%` +
+        (p.pbPremium !== null
+          ? `；PB 相对行业中位${p.pbPremium > 0 ? "溢价" : "折价"} ${Math.abs(p.pbPremium)}%`
+          : ""),
+    );
+  }
+  lines.push("（用于判断「便宜」是相对自身历史还是相对同业，两者可能背离）");
+  return lines.join("\n");
+}
+
 type PercentileLike =
   | { percentile: number; min: number; median: number; max: number; samples: number }
   | null;
@@ -267,8 +300,13 @@ function buildDataLimits(input: AnalysisInput): string {
     provided.push(`所属行业（${input.fundamentals.industry}）`);
   }
 
+  if (input.fundamentals?.peers) {
+    provided.push("同业估值对比（行业 PE/PB 中位与个股在行业内的排名）");
+  } else {
+    missing.push("同业估值对比（行业平均估值倍数，无法做横向比价）");
+  }
+
   missing.push(
-    "同业个股对比数据（无行业平均估值倍数，无法做横向比价）",
     "资金流向（主力净流入）、融资余额、股东户数变化",
     "新闻、公告、事件与催化剂、业绩预告",
     "宏观经济与政策环境数据",
@@ -303,16 +341,19 @@ ${renderImplied(input)}
 四、财务主指标（东方财富数据中心）
 ${renderFinancials(input)}
 
-五、历史估值分位（回答「估值是高是低」的关键依据）
+五、历史估值分位（回答「估值相对自身历史是高是低」）
 ${renderValuation(input)}
 
-六、多空信号一致性统计（系统按客观方向统计，用于校准你的 confidence）
+六、同业估值对比（回答「估值相对同行业是贵是贱」）
+${renderPeers(input)}
+
+七、多空信号一致性统计（系统按客观方向统计，用于校准你的 confidence）
 ${renderTally(input.tally)}
 
-七、近 ${input.klines.length} 个交易日价格序列（前复权）
+八、近 ${input.klines.length} 个交易日价格序列（前复权）
 ${renderKlines(input)}
 
-八、【数据边界】
+九、【数据边界】
 ${buildDataLimits(input)}
 
 请依据以上数据，按系统提示的推理清单与规则完成分析，只输出 JSON。`;

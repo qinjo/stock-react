@@ -2,6 +2,7 @@ import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { ApiError } from "./errors.js";
 import { dataRoutes } from "./routes/data.js";
 import { analyzeRoutes } from "./routes/analyze.js";
+import { fundamentalsRoutes } from "./routes/fundamentals.js";
 import { DEFAULT_MODEL, createDeepSeekChat, type ChatFn } from "./analysis/llm.js";
 import type { CachedAnalysis } from "./analysis/index.js";
 import { PromptCache } from "./cache.js";
@@ -50,6 +51,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerRateLimit(app, options.rateLimit ?? rateLimitFromEnv());
 
   app.register(dataRoutes);
+  app.register(fundamentalsRoutes);
   app.register(async (instance) => analyzeRoutes(instance, { chat, model, cache }));
 
   // 统一错误形状：{ status, code, message }

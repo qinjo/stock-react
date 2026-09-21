@@ -62,12 +62,42 @@ function stubRoutes(routes: Array<[string, unknown]>) {
   );
 }
 
+const fundamentals = {
+  periods: [
+    {
+      reportDate: "2026-06-30",
+      reportName: "2026中报",
+      revenue: 92278072083.21,
+      revenueYoy: 1.3,
+      netProfit: 44516880421.86,
+      netProfitYoy: -1.95,
+      deductedNetProfit: 4.4e10,
+      deductedNetProfitYoy: -2.1,
+      roe: 16.75,
+      grossMargin: 89.56,
+      netMargin: 50.75,
+      debtRatio: 15.19,
+      bps: 200.99,
+      eps: 35.57,
+      ocfPerShare: 56.55,
+    },
+  ],
+  valuation: {
+    asOf: "2026-09-18",
+    pe: { current: 17.6, y3: { percentile: 0, min: 17.66, median: 22.03, max: 33.71, samples: 730 }, y5: null },
+    pb: { current: 6.24, y3: { percentile: 6.3, min: 5.8, median: 9.1, max: 14.2, samples: 730 }, y5: null },
+  },
+  industry: "白酒Ⅱ",
+  peers: null,
+};
+
 beforeEach(() => {
   stubRoutes([
     ["/api/health", health],
     ["/api/search", { candidates }],
     ["/api/quote", { quote }],
     ["/api/kline", { klines }],
+    ["/api/fundamentals", { fundamentals }],
   ]);
 });
 
@@ -252,6 +282,56 @@ describe("App 两栏布局与指标面板", () => {
       expect(screen.getByText("贵州茅台")).toBeInTheDocument();
     });
     expect(screen.queryByText("技术指标")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始 AI 分析" })).toBeInTheDocument();
+  });
+});
+
+describe("App 的基本面展示（不消耗 LLM）", () => {
+  it("选中股票后立即展示基本面面板（无需点击分析）", async () => {
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("股票代码 / 名称"), "茅台");
+    await userEvent.click(await screen.findByRole("option", { name: /贵州茅台/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("基本面与估值")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("valuation-percentiles")).toBeInTheDocument();
+    expect(screen.getByTestId("financial-trend")).toBeInTheDocument();
+  });
+
+  it("基本面接口失败时行情与分析入口仍可用（降级不拖垮页面）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/fundamentals")) {
+          return Promise.resolve({
+            ok: false,
+            status: 502,
+            json: () => Promise.resolve({ status: "error", code: "SOURCE_UNAVAILABLE", message: "基本面不可用" }),
+          } as Response);
+        }
+        if (url.includes("/api/quote")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ quote }) } as Response);
+        }
+        if (url.includes("/api/kline")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ klines }) } as Response);
+        }
+        if (url.includes("/api/search")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ candidates }) } as Response);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(health) } as Response);
+      }),
+    );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("股票代码 / 名称"), "茅台");
+    await userEvent.click(await screen.findByRole("option", { name: /贵州茅台/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("贵州茅台")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("基本面与估值")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始 AI 分析" })).toBeInTheDocument();
   });
 });

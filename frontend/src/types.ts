@@ -155,3 +155,72 @@ export type Indicators = {
   periodLow: number;
   positionInRange: number | null;
 };
+
+/* --------------------------- 基本面（数据层） --------------------------- */
+
+export type FinancialPeriod = {
+  reportDate: string;
+  reportName: string;
+  revenue: number | null;
+  revenueYoy: number | null;
+  netProfit: number | null;
+  netProfitYoy: number | null;
+  deductedNetProfit: number | null;
+  deductedNetProfitYoy: number | null;
+  roe: number | null;
+  grossMargin: number | null;
+  netMargin: number | null;
+  debtRatio: number | null;
+  bps: number | null;
+  eps: number | null;
+  ocfPerShare: number | null;
+};
+
+export type PercentileStats = {
+  percentile: number;
+  min: number;
+  median: number;
+  max: number;
+  samples: number;
+};
+
+export type MetricPercentiles = {
+  current: number | null;
+  y3: PercentileStats | null;
+  y5: PercentileStats | null;
+};
+
+export type ValuationPercentiles = {
+  asOf: string | null;
+  pe: MetricPercentiles;
+  pb: MetricPercentiles;
+};
+
+export type PeerStats = {
+  median: number;
+  p25: number;
+  p75: number;
+  min: number;
+  max: number;
+  count: number;
+};
+
+export type PeerComparison = {
+  industry: string;
+  boardCode: string;
+  tradeDate: string;
+  peerCount: number;
+  pe: PeerStats | null;
+  pb: PeerStats | null;
+  pePremium: number | null;
+  pbPremium: number | null;
+  peRank: number | null;
+  cheaperPeers: number | null;
+};
+
+export type Fundamentals = {
+  periods: FinancialPeriod[];
+  valuation: ValuationPercentiles;
+  industry: string | null;
+  peers?: PeerComparison | null;
+};

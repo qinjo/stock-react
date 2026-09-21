@@ -2,6 +2,7 @@ import {
   ApiError,
   type AnalyzeResponse,
   type ApiErrorBody,
+  type Fundamentals,
   type Indicators,
   type Kline,
   type Quote,
@@ -62,4 +63,11 @@ export function getIndicators(code: string, limit = 250): Promise<Indicators> {
   return request<{ indicators: Indicators }>(
     `/api/indicators?code=${encodeURIComponent(code)}&limit=${limit}`,
   ).then((d) => d.indicators);
+}
+
+/** 基本面数据（财报 + 估值分位 + 同业对比），不消耗 LLM 调用。 */
+export function getFundamentals(code: string): Promise<Fundamentals> {
+  return request<{ fundamentals: Fundamentals }>(
+    `/api/fundamentals?code=${encodeURIComponent(code)}`,
+  ).then((d) => d.fundamentals);
 }

@@ -3,7 +3,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  computePeerComparison,
   computeValuationPercentiles,
+  extractIndustrySnapshot,
+  peerStats,
   extractIndustry,
   normalizeFinancialPeriods,
   normalizeValuationHistory,
@@ -226,5 +229,79 @@ describe("fetchValuationHistory 的分页合并（回归：曾因二次归一化
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("同业对比（行业中位与个股相对位置）", () => {
+  const boardRaw = load("industry-board-016165.raw.json");
+  const snapshot = extractIndustrySnapshot(boardRaw)!;
+
+  it("解析板块快照：19 只白酒股，PE/PB 中位与笔记独立计算一致", () => {
+    expect(snapshot.peerCount).toBe(19);
+    expect(snapshot.industry).toBe("白酒Ⅱ");
+    expect(snapshot.boardCode).toBe("016165");
+    expect(snapshot.tradeDate).toBe("2026-09-18");
+    // 调研笔记独立算出：PE 中位 25.69、PB 中位 2.29
+    expect(snapshot.pe!.median).toBeCloseTo(25.69, 1);
+    expect(snapshot.pb!.median).toBeCloseTo(2.29, 1);
+  });
+
+  it("只统计正值（亏损股的负 PE 不进入统计）", () => {
+    expect(snapshot.pe!.count).toBeLessThan(snapshot.peerCount); // 19 只中 14 只有效
+    expect(snapshot.pe!.count).toBe(14);
+    expect(snapshot.pe!.min).toBeGreaterThan(0);
+  });
+
+  it("个股 PE 低于行业中位时溢价为负，且能算出排名", () => {
+    // 茅台当前 PE 17.6 低于行业中位 25.69
+    const peers = computePeerComparison(snapshot, 17.6, 6.25);
+    expect(peers.pePremium).toBeLessThan(0);
+    expect(peers.pePremium).toBeCloseTo(-31.5, 0);
+    expect(peers.peRank).toBeGreaterThanOrEqual(1);
+    expect(peers.cheaperPeers).not.toBeNull();
+    // 溢价与排名自洽：排名 = 更便宜的只数 + 1
+    expect(peers.peRank).toBe(peers.cheaperPeers! + 1);
+  });
+
+  it("个股 PE 高于行业中位时溢价为正", () => {
+    const peers = computePeerComparison(snapshot, 40, 6.25);
+    expect(peers.pePremium).toBeGreaterThan(0);
+    expect(peers.peRank).toBeGreaterThan(snapshot.pe!.count / 2);
+  });
+
+  it("不同个股共享同一板块快照但得到各自的溢价（缓存隔离）", () => {
+    const cheap = computePeerComparison(snapshot, 13.5, 3.6);
+    const rich = computePeerComparison(snapshot, 30, 8);
+    expect(cheap.pePremium).not.toBeCloseTo(rich.pePremium!, 1);
+    expect(cheap.peRank!).toBeLessThan(rich.peRank!);
+  });
+
+  it("无效当前值时溢价与排名为 null（不编造）", () => {
+    const peers = computePeerComparison(snapshot, null, null);
+    expect(peers.pePremium).toBeNull();
+    expect(peers.pbPremium).toBeNull();
+    expect(peers.peRank).toBeNull();
+  });
+
+  it("结构异常返回 null", () => {
+    expect(extractIndustrySnapshot({})).toBeNull();
+    expect(extractIndustrySnapshot(null)).toBeNull();
+  });
+});
+
+describe("peerStats 分位统计", () => {
+  it("返回中位/四分位/极值", () => {
+    const s = peerStats([10, 20, 30, 40, 50])!;
+    expect(s.median).toBe(30);
+    expect(s.min).toBe(10);
+    expect(s.max).toBe(50);
+    expect(s.p25).toBeLessThan(s.median);
+    expect(s.p75).toBeGreaterThan(s.median);
+  });
+
+  it("少于 3 只有效值时拒绝给结论", () => {
+    expect(peerStats([10, 20])).toBeNull();
+    expect(peerStats([])).toBeNull();
+    expect(peerStats([-5, 0, 10])).toBeNull(); // 仅 1 个正值
   });
 });

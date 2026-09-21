@@ -103,6 +103,18 @@ const sampleInput: AnalysisInput = {
       },
     },
     industry: "白酒Ⅱ",
+    peers: {
+      industry: "白酒Ⅱ",
+      boardCode: "016165",
+      tradeDate: "2026-09-18",
+      peerCount: 19,
+      pe: { median: 25.69, p25: 14.98, p75: 32.48, min: 11.2, max: 45.6, count: 14 },
+      pb: { median: 2.29, p25: 1.8, p75: 4.1, min: 1.2, max: 6.8, count: 19 },
+      pePremium: -31.5,
+      pbPremium: 173.0,
+      peRank: 2,
+      cheaperPeers: 1,
+    },
   },
 };
 
@@ -399,7 +411,7 @@ describe("数据边界是动态生成的（不再声明其实已有的数据）"
     expect(user).toContain("历史估值分位（PE/PB 近 3 年与近 5 年）");
     // 这是本次改造的核心：不能再让模型说"未提供历史估值分位"
     expect(user).not.toMatch(/未提供[^。]*历史估值分位/);
-    expect(user).toContain("同业个股对比数据"); // 该项仍未提供，应如实声明
+    expect(user).toContain("同业估值对比（行业 PE/PB 中位与个股在行业内的排名）");
   });
 
   it("渲染财报表格（亿元换算 + YTD 口径声明）", () => {

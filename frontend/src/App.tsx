@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import AnalysisPanel from "./components/AnalysisPanel";
+import FundamentalsPanel from "./components/FundamentalsPanel";
 import IndicatorPanel from "./components/IndicatorPanel";
 import KlineChart from "./components/KlineChart";
 import QuoteCard from "./components/QuoteCard";
 import SearchBox from "./components/SearchBox";
-import { getIndicators, getKline, getQuote } from "./api";
+import { getFundamentals, getIndicators, getKline, getQuote } from "./api";
 import {
   ApiError,
   type ApiErrorCode,
+  type Fundamentals,
   type Indicators,
   type Kline,
   type Quote,
@@ -26,6 +28,7 @@ type StockState =
       quote: Quote;
       klines: Kline[];
       indicators: Indicators | null;
+      fundamentals: Fundamentals | null;
     }
   | { kind: "error"; code: ApiErrorCode; message: string };
 
@@ -57,13 +60,14 @@ export default function App() {
     setStock({ kind: "loading", candidate });
     try {
       // K 线取 250 根：既供图表叠加 MA200，也与指标样本区间一致
-      const [quote, klines, indicators] = await Promise.all([
+      const [quote, klines, indicators, fundamentals] = await Promise.all([
         getQuote(candidate.code),
         getKline(candidate.code, 250),
-        // 指标失败不该拖垮行情展示（降级为不显示指标面板）
+        // 指标/基本面失败不该拖垮行情展示（各自降级为不显示对应面板）
         getIndicators(candidate.code).catch(() => null),
+        getFundamentals(candidate.code).catch(() => null),
       ]);
-      setStock({ kind: "success", candidate, quote, klines, indicators });
+      setStock({ kind: "success", candidate, quote, klines, indicators, fundamentals });
     } catch (err) {
       if (err instanceof ApiError) {
         setStock({ kind: "error", code: err.code, message: err.message });
@@ -137,6 +141,8 @@ export default function App() {
             </aside>
 
             <div className="space-y-6">
+              {/* 基本面数据先于 AI 分析呈现：不消耗 LLM，选中即可看 */}
+              {stock.fundamentals && <FundamentalsPanel fundamentals={stock.fundamentals} />}
               {/* key 确保换股票时分析状态重置 */}
               <AnalysisPanel
                 key={stock.candidate.code}
