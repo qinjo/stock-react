@@ -41,10 +41,17 @@ export default function KlineChart({ klines, symbol }: Props) {
 
     chart?.setDataLoader({
       getBars: ({ callback }) => {
-        // 单次全量返回，不声明可继续加载（MVP 只展示 60 根）
+        // 单次全量返回，不声明可继续加载（MVP 只展示已有数据）
         callback(dataRef.current, { forward: false, backward: false });
       },
     });
+
+    // 主图叠加 SMA50 / SMA200：与后端指标口径一致，趋势关系一眼可见
+    // （paneId 指向蜡烛主图；数据需 ≥200 根，故上游按 250 根取数）
+    chart?.createIndicator(
+      { name: "MA", calcParams: [50, 200], paneId: "candle_pane" },
+      false,
+    );
     chart?.setSymbol({ ticker: symbol, pricePrecision: 2, volumePrecision: 0 });
     chart?.setPeriod({ type: "day", span: 1 });
 
@@ -70,7 +77,10 @@ export default function KlineChart({ klines, symbol }: Props) {
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-medium text-slate-700">日 K 走势（前复权）</h2>
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-sm font-medium text-slate-700">日 K 走势（前复权）</h2>
+        <span className="text-xs text-slate-400">MA50 / MA200</span>
+      </div>
       <div ref={containerRef} className="mt-2 h-80 w-full" data-testid="kline-container" />
       {klines.length === 0 && (
         <p className="mt-2 text-sm text-slate-400">暂无 K 线数据</p>

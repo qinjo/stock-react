@@ -6,6 +6,7 @@ import { vi } from "vitest";
 vi.mock("klinecharts", () => {
   const chart = {
     setDataLoader: vi.fn(),
+    createIndicator: vi.fn(),
     setSymbol: vi.fn(),
     setPeriod: vi.fn(),
     resize: vi.fn(),

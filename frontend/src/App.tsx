@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
 import AnalysisPanel from "./components/AnalysisPanel";
+import IndicatorPanel from "./components/IndicatorPanel";
 import KlineChart from "./components/KlineChart";
 import QuoteCard from "./components/QuoteCard";
 import SearchBox from "./components/SearchBox";
-import { getKline, getQuote } from "./api";
-import { ApiError, type ApiErrorCode, type Kline, type Quote, type SearchCandidate } from "./types";
+import { getIndicators, getKline, getQuote } from "./api";
+import {
+  ApiError,
+  type ApiErrorCode,
+  type Indicators,
+  type Kline,
+  type Quote,
+  type SearchCandidate,
+} from "./types";
 
 type Health = { status: string; service: string; time: string; analysisReady?: boolean };
 
@@ -12,7 +20,13 @@ type Health = { status: string; service: string; time: string; analysisReady?: b
 type StockState =
   | { kind: "idle" }
   | { kind: "loading"; candidate: SearchCandidate }
-  | { kind: "success"; candidate: SearchCandidate; quote: Quote; klines: Kline[] }
+  | {
+      kind: "success";
+      candidate: SearchCandidate;
+      quote: Quote;
+      klines: Kline[];
+      indicators: Indicators | null;
+    }
   | { kind: "error"; code: ApiErrorCode; message: string };
 
 export default function App() {
@@ -42,11 +56,14 @@ export default function App() {
   async function handleSelect(candidate: SearchCandidate) {
     setStock({ kind: "loading", candidate });
     try {
-      const [quote, klines] = await Promise.all([
+      // K 线取 250 根：既供图表叠加 MA200，也与指标样本区间一致
+      const [quote, klines, indicators] = await Promise.all([
         getQuote(candidate.code),
-        getKline(candidate.code, 60),
+        getKline(candidate.code, 250),
+        // 指标失败不该拖垮行情展示（降级为不显示指标面板）
+        getIndicators(candidate.code).catch(() => null),
       ]);
-      setStock({ kind: "success", candidate, quote, klines });
+      setStock({ kind: "success", candidate, quote, klines, indicators });
     } catch (err) {
       if (err instanceof ApiError) {
         setStock({ kind: "error", code: err.code, message: err.message });
@@ -65,11 +82,11 @@ export default function App() {
       <header className="border-b border-slate-200 bg-white px-6 py-4">
         <h1 className="text-xl font-semibold">A股智能分析</h1>
         <p className="mt-1 text-sm text-slate-500">
-          输入股票代码或名称，获取行情与 AI 分析（AI 分析开发中）
+          输入股票代码或名称，获取行情、技术指标与 AI 分析
         </p>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-6 px-6 py-8">
+      <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <SearchBox onSelect={handleSelect} disabled={stock.kind === "loading"} />
         </div>
@@ -101,21 +118,32 @@ export default function App() {
           </div>
         )}
 
+        {/*
+          宽屏两栏：左栏行情常驻（sticky），右栏 AI 分析。
+          —— 读长报告时行情/图表不会滚走，便于随时对照。
+          窄屏（<lg）自动降级为单列堆叠。
+        */}
         {stock.kind === "success" && (
-          <>
-            <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
-            <KlineChart klines={stock.klines} symbol={stock.candidate.code} />
-            {/* key 确保换股票时分析状态重置 */}
-            <AnalysisPanel
-              key={stock.candidate.code}
-              code={stock.candidate.code}
-              name={stock.candidate.name}
-            />
-          </>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
+            <aside className="space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+              <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
+              <KlineChart klines={stock.klines} symbol={stock.candidate.code} />
+              {stock.indicators && <IndicatorPanel indicators={stock.indicators} />}
+            </aside>
+
+            <div className="space-y-6">
+              {/* key 确保换股票时分析状态重置 */}
+              <AnalysisPanel
+                key={stock.candidate.code}
+                code={stock.candidate.code}
+                name={stock.candidate.name}
+              />
+            </div>
+          </div>
         )}
       </main>
 
-      <footer className="mx-auto max-w-3xl space-y-2 px-6 pb-8 text-xs text-slate-400">
+      <footer className="mx-auto max-w-7xl space-y-2 px-6 pb-8 text-xs text-slate-400">
         <p className="rounded border border-slate-200 bg-white px-3 py-2 text-slate-500">
           ⚠️ 本页所有分析由 AI 生成，仅供学习与研究参考，<strong>不构成任何投资建议</strong>。
           数据来自公开免费接口，可能存在延迟或错误，请以交易所披露为准。

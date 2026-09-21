@@ -178,3 +178,80 @@ describe("App 的 T5 集成：分析入口与合规", () => {
     });
   });
 });
+
+describe("App 两栏布局与指标面板", () => {
+  it("选中股票后展示技术指标面板（此前页面上不可见）", async () => {
+    const indicators = {
+      sampleSize: 250,
+      fromDate: "2025-09-10",
+      toDate: "2026-09-18",
+      sma50: 1300.97,
+      sma200: 1335.94,
+      priceVsSma50: -3.8,
+      priceVsSma200: -6.32,
+      rsi14: 37.02,
+      macd: { dif: -11.45, dea: -6.12, hist: -5.33 },
+      atr14: 19.27,
+      atrPercent: 1.54,
+      return20d: -4.07,
+      return60d: 4.74,
+      volatility20d: 12.98,
+      periodHigh: 1539.98,
+      periodLow: 1151.01,
+      positionInRange: 25.9,
+    };
+    stubRoutes([
+      ["/api/health", health],
+      ["/api/search", { candidates }],
+      ["/api/quote", { quote }],
+      ["/api/kline", { klines }],
+      ["/api/indicators", { indicators }],
+    ]);
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("股票代码 / 名称"), "茅台");
+    await userEvent.click(await screen.findByRole("option", { name: /贵州茅台/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("技术指标")).toBeInTheDocument();
+    });
+    expect(screen.getByText("1300.97")).toBeInTheDocument();
+  });
+
+  it("指标接口失败时行情仍可用（降级不拖垮页面）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/indicators")) {
+          return Promise.resolve({
+            ok: false,
+            status: 502,
+            json: () =>
+              Promise.resolve({ status: "error", code: "SOURCE_UNAVAILABLE", message: "指标不可用" }),
+          } as Response);
+        }
+        if (url.includes("/api/quote")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ quote }) } as Response);
+        }
+        if (url.includes("/api/kline")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ klines }) } as Response);
+        }
+        if (url.includes("/api/search")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ candidates }) } as Response);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(health) } as Response);
+      }),
+    );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("股票代码 / 名称"), "茅台");
+    await userEvent.click(await screen.findByRole("option", { name: /贵州茅台/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("贵州茅台")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("技术指标")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始 AI 分析" })).toBeInTheDocument();
+  });
+});

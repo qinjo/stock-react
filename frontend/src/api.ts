@@ -2,6 +2,7 @@ import {
   ApiError,
   type AnalyzeResponse,
   type ApiErrorBody,
+  type Indicators,
   type Kline,
   type Quote,
   type SearchCandidate,
@@ -54,4 +55,11 @@ export function getKline(code: string, limit = 60): Promise<Kline[]> {
 /** 请求 AI 分析。数据不足/分析失败会以 ApiError(code) 抛出，由 UI 分流展示。 */
 export function getAnalysis(code: string): Promise<AnalyzeResponse> {
   return request<AnalyzeResponse>(`/api/analyze?code=${encodeURIComponent(code)}`);
+}
+
+/** 派生技术指标（后端已算好，前端只做展示）。 */
+export function getIndicators(code: string, limit = 250): Promise<Indicators> {
+  return request<{ indicators: Indicators }>(
+    `/api/indicators?code=${encodeURIComponent(code)}&limit=${limit}`,
+  ).then((d) => d.indicators);
 }

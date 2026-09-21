@@ -117,3 +117,25 @@ export type AnalyzeResponse = {
   usage?: TokenUsage;
   input: { code: string; name: string; dataDate: string };
 };
+
+/* ------------------------- 技术指标（T3 后端产出） ------------------------- */
+
+export type Indicators = {
+  sampleSize: number;
+  fromDate: string;
+  toDate: string;
+  sma50: number | null;
+  sma200: number | null;
+  priceVsSma50: number | null;
+  priceVsSma200: number | null;
+  rsi14: number | null;
+  macd: { dif: number | null; dea: number | null; hist: number | null };
+  atr14: number | null;
+  atrPercent: number | null;
+  return20d: number | null;
+  return60d: number | null;
+  volatility20d: number | null;
+  periodHigh: number;
+  periodLow: number;
+  positionInRange: number | null;
+};
