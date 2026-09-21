@@ -13,7 +13,8 @@
 - **日 K 走势图**：250 根前复权日 K（klinecharts，支持缩放/十字光标），主图叠加 MA50 / MA200
 - **派生技术指标**：SMA50/200、RSI14、MACD(DIF/DEA/HIST)、ATR14、20/60 日涨跌幅、20 日年化波动率、区间位置等约 12 项，并在页面上以紧凑面板呈现（含 RSI 分区提示与多空动能标注）
 - **财务基本面**：近 8 个报告期的营收/净利/同比/ROE/毛利率/净利率/资产负债率/EPS/BPS/每股经营现金流
-- **历史估值分位**：PE_TTM/PB_MRQ 的日度历史序列（约 6.4 年）→ 近 3 年与近 5 年分位，回答「估值是高是低」
+- **历史估值分位**：PE_TTM/PB_MRQ 的日度历史序列（约 6.4 年）→ 近 3 年与近 5 年分位，回答「估值相对自身历史是高是低」
+- **同业估值对比**：行业 PE/PB 中位与个股在行业内的排名 → 回答「估值相对同行业是贵是贱」（与自身历史分位常出现背离，是重要信号）
 - **隐含估值量**：由 PE/PB 反推 ROE、EPS、每股净资产、净利润（零外部数据的推导值，会明确标注为推断）
 - **AI 分析**：5 档评级 + 0-100 置信度 + 目标价/时间窗 + 五节报告（快照 / 基本面 / 技术面 / 风险清单 / 结论）
 - **异常契约**：区分「数据不足」「分析失败」「数据源不可用」三态，数据不足时明确 abstain 而非硬凑结论
@@ -38,7 +39,7 @@
    ├── tencent.ts           腾讯适配器（GBK 解码、市值/成交额单位换算、搜索）
    ├── indicators.ts        派生指标（technicalindicators；纯函数）
    ├── derived.ts           隐含估值量（PB/PE→ROE 等）与多空一致性统计
-   ├── fundamentals.ts      财报主指标 + 日度估值历史 → 估值分位（datacenter-web）
+   ├── fundamentals.ts      财报主指标 + 日度估值历史 → 估值分位、同业对比（datacenter-web）
    ├── cache.ts             分析缓存（键=股票+交易日，TTL 可配）
    ├── rate-limit.ts        按 IP 限流（公开部署时启用）
    └── analysis/
@@ -89,6 +90,7 @@ npm run dev                 # http://localhost:5173
 | `GET /api/quote?code=` | 实时快照 |
 | `GET /api/kline?code=&limit=60` | 日 K（前复权，limit 上限 500） |
 | `GET /api/indicators?code=&limit=250` | 派生技术指标 |
+| `GET /api/fundamentals?code=` | 财报 + 估值分位 + 同业对比（**不消耗 LLM 调用**） |
 | `GET /api/analyze?code=` | 完整 AI 分析（含缓存），响应带 `usage` token 用量 |
 
 **统一错误形状**（前端按 `code` 分流展示）：
