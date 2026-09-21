@@ -52,6 +52,58 @@ const sampleInput: AnalysisInput = {
     { date: "2026-09-17", open: 1257.98, close: 1266.98, high: 1267.6, low: 1254, volume: 17554 },
     { date: "2026-09-18", open: 1262.99, close: 1257.12, high: 1265.88, low: 1256.1, volume: 24891 },
   ],
+  fundamentals: {
+    periods: [
+      {
+        reportDate: "2026-06-30",
+        reportName: "2026中报",
+        revenue: 92278072083.21,
+        revenueYoy: 1.3,
+        netProfit: 44516880421.86,
+        netProfitYoy: -1.95,
+        deductedNetProfit: 4.4e10,
+        deductedNetProfitYoy: -2.1,
+        roe: 16.75,
+        grossMargin: 89.56,
+        netMargin: 50.75,
+        debtRatio: 15.19,
+        bps: 200.99,
+        eps: 35.57,
+        ocfPerShare: 56.55,
+      },
+      {
+        reportDate: "2025-12-31",
+        reportName: "2025年报",
+        revenue: 172054000000,
+        revenueYoy: -1.2,
+        netProfit: 82320000000,
+        netProfitYoy: -4.53,
+        deductedNetProfit: 8.1e10,
+        deductedNetProfitYoy: -5,
+        roe: 32.53,
+        grossMargin: 91.18,
+        netMargin: 50.52,
+        debtRatio: 16.41,
+        bps: 195.36,
+        eps: 65.66,
+        ocfPerShare: 56.55,
+      },
+    ],
+    valuation: {
+      asOf: "2026-09-18",
+      pe: {
+        current: 19.3,
+        y3: { percentile: 5.6, min: 18.2, median: 28.4, max: 45.6, samples: 730 },
+        y5: { percentile: 3.4, min: 17.1, median: 31.2, max: 62.3, samples: 1215 },
+      },
+      pb: {
+        current: 6.25,
+        y3: { percentile: 6.3, min: 5.8, median: 9.1, max: 14.2, samples: 730 },
+        y5: { percentile: 3.8, min: 5.5, median: 10.4, max: 18.9, samples: 1215 },
+      },
+    },
+    industry: "白酒Ⅱ",
+  },
 };
 
 const goodJson = JSON.stringify({
@@ -328,5 +380,40 @@ describe("新增 schema 字段的解析", () => {
     expect(a.dataLimits).toEqual([]);
     expect(a.whatWouldChangeMyMind).toBe("");
     expect(a.monitoring).toEqual([]);
+  });
+});
+
+
+describe("数据边界是动态生成的（不再声明其实已有的数据）", () => {
+  it("未提供财报与分位时，明确声明这两项缺失", () => {
+    const { user } = buildAnalysisPrompt({ ...sampleInput, fundamentals: null });
+    expect(user).toContain("未提供");
+    expect(user).toContain("财务报表明细");
+    expect(user).toContain("历史估值分位");
+  });
+
+  it("提供财报与分位后，改列为「已提供」且不再声明缺失估值分位", () => {
+    const { user } = buildAnalysisPrompt(sampleInput);
+    expect(user).toContain("已提供");
+    expect(user).toContain("财务主指标（近 2 期");
+    expect(user).toContain("历史估值分位（PE/PB 近 3 年与近 5 年）");
+    // 这是本次改造的核心：不能再让模型说"未提供历史估值分位"
+    expect(user).not.toMatch(/未提供[^。]*历史估值分位/);
+    expect(user).toContain("同业个股对比数据"); // 该项仍未提供，应如实声明
+  });
+
+  it("渲染财报表格（亿元换算 + YTD 口径声明）", () => {
+    const { user } = buildAnalysisPrompt(sampleInput);
+    expect(user).toContain("2026中报");
+    expect(user).toContain("922.78"); // 营收亿元化
+    expect(user).toContain("年内累计");
+  });
+
+  it("渲染估值分位（含区间/中位/样本数）", () => {
+    const { user } = buildAnalysisPrompt(sampleInput);
+    expect(user).toContain("近3年 5.6% 分位");
+    expect(user).toContain("近5年 3.4% 分位");
+    expect(user).toContain("样本 730 日");
+    expect(user).toContain("白酒Ⅱ");
   });
 });

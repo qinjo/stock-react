@@ -1,4 +1,5 @@
 import type { ImpliedValuation, SignalTally } from "../derived.js";
+import type { Fundamentals } from "../fundamentals.js";
 
 /** 分析领域类型：LLM 输出契约与编排结果。 */
 
@@ -112,6 +113,8 @@ export type AnalysisInput = {
   implied?: ImpliedValuation | null;
   /** 12 项指标的多空一致性统计（用于校准 confidence 上限） */
   tally?: SignalTally;
+  /** 基本面：财报主指标 + 历史估值分位（缺失表示获取失败，不影响分析） */
+  fundamentals?: Fundamentals | null;
   /** 截尾日 K（喂给模型以感知近期形态） */
   klines: Array<{ date: string; open: number; close: number; high: number; low: number; volume: number }>;
 };

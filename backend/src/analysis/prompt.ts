@@ -22,8 +22,11 @@ const SYSTEM_PROMPT = `你是一位严谨的 A 股投研分析师，以长期价
 你的读者是有经验的投资者：他们要的是可核查的推理与可执行的结论，不是描述性复述。
 
 【推理清单】请按顺序完成，再给结论：
-1. 估值与盈利质量：PE/PB 处于什么水平？由 PE/PB 推出的隐含 ROE、隐含每股收益说明了什么？
-   高 ROE 配低 PE 是机会还是陷阱？请给出你的判断依据。
+1. 估值与盈利质量（**本次已提供财报与历史估值分位，必须用上**）：
+   - 当前 PE/PB 处于近 3 年、近 5 年的什么分位？「便宜」是否有历史依据？
+   - 用财报数据核对：ROE、毛利率、净利率、资产负债率的最新值与**趋势**（对比历史期间）
+   - 营收与净利同比增速是正还是负？低估值是**错杀**（盈利仍增长）还是**盈利下修的定价**（增速转负）？
+   - 由 PE/PB 推出的隐含 ROE 与财报实际 ROE 是否互相印证？
 2. 趋势结构：最新价相对 SMA50 / SMA200 的位置与偏离幅度，均线是多头还是空头排列？
 3. 动能与摆动：MACD 的 DIF/DEA/柱状图关系如何演化？RSI 处于什么区间，是否存在极端读数？
 4. 波动与位置：ATR 与年化波动率反映的波动强度；价格处于近期区间的什么位置？
@@ -177,14 +180,104 @@ confidence 上限：${tally.maxConfidence}（你的 confidence 不得超过此�
 ${detail}`;
 }
 
-const DATA_LIMITS = `本次**未提供**以下数据，请不要假装拥有，也不要用常识填补：
-- 财务报表明细（营业收入、毛利率、净利率、现金流、资产负债率、利润增速）
-- 历史估值分位（当前 PE/PB 在自身历史的百分位）
-- 行业与同业对比数据（行业平均估值、公司在行业中的位置）
-- 资金流向（主力净流入）、融资余额、股东户数变化
-- 新闻、公告、事件与催化剂、业绩预告
-- 宏观经济与政策环境数据
-（可获得的信息仅限：上方行情快照、派生技术指标、隐含估值量、价格序列。）`;
+/** 亿元化（保留两位）。 */
+function yi(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return (v / 1e8).toFixed(2);
+}
+
+/** 渲染最近若干期财报主指标（年内累计口径）。 */
+function renderFinancials(input: AnalysisInput): string {
+  const f = input.fundamentals;
+  if (!f || f.periods.length === 0) return "（财务数据获取失败或不可用）";
+
+  const header =
+    "报告期 | 营收(亿) | 营收同比% | 归母净利(亿) | 净利同比% | ROE% | 毛利率% | 净利率% | 负债率% | EPS | BPS | 每股现金流";
+  const rows = f.periods.slice(0, 6).map((p) =>
+    [
+      p.reportName,
+      yi(p.revenue),
+      n(p.revenueYoy),
+      yi(p.netProfit),
+      n(p.netProfitYoy),
+      n(p.roe),
+      n(p.grossMargin),
+      n(p.netMargin),
+      n(p.debtRatio),
+      n(p.eps),
+      n(p.bps),
+      n(p.ocfPerShare),
+    ].join(" | "),
+  );
+  return `${[header, ...rows].join("\n")}\n（口径说明：以上为**年内累计（YTD）**，非单季；金额单位已换算为亿元）`;
+}
+
+/** 渲染历史估值分位（回答「估值是高是低」）。 */
+function renderValuation(input: AnalysisInput): string {
+  const v = input.fundamentals?.valuation;
+  if (!v) return "（估值历史数据不可用）";
+
+  const line = (name: string, m: { current: number | null; y3: PercentileLike; y5: PercentileLike }) => {
+    if (m.current === null) return `${name}：当前值缺失`;
+    const parts = [`当前 ${m.current}`];
+    parts.push(
+      m.y3
+        ? `近3年 ${m.y3.percentile}% 分位（区间 ${m.y3.min}–${m.y3.max}，中位 ${m.y3.median}，样本 ${m.y3.samples} 日）`
+        : "近3年样本不足",
+    );
+    parts.push(m.y5 ? `近5年 ${m.y5.percentile}% 分位` : "近5年样本不足");
+    return `${name}：${parts.join("；")}`;
+  };
+
+  const industry = input.fundamentals?.industry;
+  return [
+    line("PE_TTM", v.pe),
+    line("PB_MRQ", v.pb),
+    `数据截至 ${v.asOf ?? "未知"}`,
+    industry ? `所属行业：${industry}` : "所属行业：未知",
+    "（分位数越低表示越接近历史低估区间；<20% 通常属历史低位，>80% 属历史高位）",
+  ].join("\n");
+}
+
+type PercentileLike =
+  | { percentile: number; min: number; median: number; max: number; samples: number }
+  | null;
+
+/**
+ * 动态数据边界：按**实际提供**的数据生成，避免声明了其实已有的数据
+ * （此前模型反复说"未提供历史估值分位"，而该数据其实可得）。
+ */
+function buildDataLimits(input: AnalysisInput): string {
+  const provided = ["行情快照", "派生技术指标（12 项）", "隐含估值量", "多空一致性统计", "价格序列"];
+  const missing: string[] = [];
+
+  if (input.fundamentals?.periods?.length) {
+    provided.push(`财务主指标（近 ${input.fundamentals.periods.length} 期，年内累计口径）`);
+  } else {
+    missing.push("财务报表明细（营收、毛利率、净利率、现金流、资产负债率、利润增速）");
+  }
+
+  if (input.fundamentals?.valuation?.pe?.y3) {
+    provided.push("历史估值分位（PE/PB 近 3 年与近 5 年）");
+  } else {
+    missing.push("历史估值分位（当前 PE/PB 在自身历史的百分位）");
+  }
+
+  if (input.fundamentals?.industry) {
+    provided.push(`所属行业（${input.fundamentals.industry}）`);
+  }
+
+  missing.push(
+    "同业个股对比数据（无行业平均估值倍数，无法做横向比价）",
+    "资金流向（主力净流入）、融资余额、股东户数变化",
+    "新闻、公告、事件与催化剂、业绩预告",
+    "宏观经济与政策环境数据",
+  );
+
+  return `本次**已提供**：${provided.join("、")}。
+本次**未提供**（不要假装拥有，也不要用常识填补）：
+${missing.map((m) => `- ${m}`).join("\n")}`;
+}
 
 export function buildAnalysisPrompt(input: AnalysisInput): { system: string; user: string } {
   const user = `【数据】
@@ -207,14 +300,20 @@ ${renderIndicators(input.indicators)}
 三、隐含估值量（由 PE/PB 数学推导，零外部数据）
 ${renderImplied(input)}
 
-四、多空信号一致性统计（系统按客观方向统计，用于校准你的 confidence）
+四、财务主指标（东方财富数据中心）
+${renderFinancials(input)}
+
+五、历史估值分位（回答「估值是高是低」的关键依据）
+${renderValuation(input)}
+
+六、多空信号一致性统计（系统按客观方向统计，用于校准你的 confidence）
 ${renderTally(input.tally)}
 
-五、近 ${input.klines.length} 个交易日价格序列（前复权）
+七、近 ${input.klines.length} 个交易日价格序列（前复权）
 ${renderKlines(input)}
 
-六、【数据边界】
-${DATA_LIMITS}
+八、【数据边界】
+${buildDataLimits(input)}
 
 请依据以上数据，按系统提示的推理清单与规则完成分析，只输出 JSON。`;
 

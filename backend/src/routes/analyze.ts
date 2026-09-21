@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { fetchKline, fetchQuote } from "../datasource.js";
 import { computeIndicators, InsufficientDataError } from "../indicators.js";
 import { deriveValuation, tallySignals } from "../derived.js";
+import { fetchFundamentals } from "../fundamentals.js";
 import { runAnalysis, type CachedAnalysis } from "../analysis/index.js";
 import type { PromptCache } from "../cache.js";
 import type { ChatFn } from "../analysis/llm.js";
@@ -31,6 +32,12 @@ export async function buildAnalysisInput(code: string): Promise<AnalysisInput> {
   const indicators = computeIndicators(klines); // 数据不足时抛 InsufficientDataError
   const dataDate = klines[klines.length - 1]!.date;
 
+  // 基本面（财报 + 估值分位）：走 datacenter-web（与 push2 反爬按域名隔离）。
+  // 失败不阻塞分析——降级为 null，提示词会相应缩小数据边界声明。
+  const fundamentals = await fetchFundamentals(quote.code || code, quote.pe, quote.pb).catch(
+    () => null,
+  );
+
   return {
     code: quote.code || code,
     name: quote.name,
@@ -51,6 +58,7 @@ export async function buildAnalysisInput(code: string): Promise<AnalysisInput> {
     // 派生估值量（PE/PB 推导）与多空一致性统计，均零外部数据、零 LLM 成本
     implied: deriveValuation(quote),
     tally: tallySignals(indicators, quote),
+    fundamentals,
     klines: klines.slice(-PROMPT_KLINES).map((k) => ({
       date: k.date,
       open: k.open,
