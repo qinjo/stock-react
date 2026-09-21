@@ -68,3 +68,39 @@ describe("数据路由的输入校验与错误契约", () => {
     expect(fetchKline).toHaveBeenLastCalledWith("600519", 60);
   });
 });
+
+describe("/api/indicators", () => {
+  it("默认拉取 250 根以便计算 SMA200", async () => {
+    vi.mocked(fetchKline).mockResolvedValue([]);
+
+    await app.inject({ method: "GET", url: "/api/indicators?code=600519" });
+    expect(fetchKline).toHaveBeenLastCalledWith("600519", 250);
+  });
+
+  it("数据不足映射为 400 INSUFFICIENT_DATA（abstain 契约）", async () => {
+    const few = Array.from({ length: 10 }, (_, i) => ({
+      date: `2026-01-${String(i + 1).padStart(2, "0")}`,
+      open: 1,
+      close: 1,
+      high: 1,
+      low: 1,
+      volume: 1,
+      amount: null,
+      amplitude: null,
+      changePercent: null,
+      changeAmount: null,
+      turnoverRate: null,
+    }));
+    vi.mocked(fetchKline).mockResolvedValue(few);
+
+    const res = await app.inject({ method: "GET", url: "/api/indicators?code=600519" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ status: "error", code: "INSUFFICIENT_DATA" });
+  });
+
+  it("缺少 code 返回 400", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/indicators" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: "INVALID_INPUT" });
+  });
+});
