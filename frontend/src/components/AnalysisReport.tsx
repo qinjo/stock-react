@@ -17,7 +17,8 @@ export default function AnalysisReport({ sections }: Props) {
       {blocks.map(({ title, body }) => (
         <section key={title}>
           <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+          {/* 卡片保持全宽，仅正文限宽：超宽屏上长行难读（理想行宽约 65–75 字符） */}
+          <p className="mt-1 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
             {body || "（模型未提供该节内容）"}
           </p>
         </section>
@@ -26,7 +27,7 @@ export default function AnalysisReport({ sections }: Props) {
       <section>
         <h3 className="text-sm font-semibold text-slate-800">④ 风险点清单</h3>
         {sections.risks.length > 0 ? (
-          <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-slate-700">
+          <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm text-slate-700">
             {sections.risks.map((risk, i) => (
               <li key={`${i}-${risk.slice(0, 12)}`}>{risk}</li>
             ))}
@@ -38,7 +39,7 @@ export default function AnalysisReport({ sections }: Props) {
 
       <section>
         <h3 className="text-sm font-semibold text-slate-800">⑤ 结论与目标区间</h3>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+        <p className="mt-1 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
           {sections.conclusion || "（模型未提供结论）"}
         </p>
       </section>

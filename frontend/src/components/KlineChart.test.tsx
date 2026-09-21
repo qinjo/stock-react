@@ -84,3 +84,20 @@ describe("KlineChart", () => {
     expect(screen.getByText("暂无 K 线数据")).toBeInTheDocument();
   });
 });
+
+describe("KlineChart 弹性高度（消除左栏内部滚动条）", () => {
+  it("fillHeight 模式在宽屏吃掉剩余高度，窄屏仍保留固定高度", () => {
+    render(<KlineChart klines={klines} symbol="600519" fillHeight />);
+    const container = screen.getByTestId("kline-container");
+    expect(container.className).toContain("lg:flex-1");
+    expect(container.className).toContain("lg:min-h-[12rem]");
+    expect(container.className).toContain("h-[22rem]"); // 窄屏兜底
+  });
+
+  it("默认模式仍是固定高度（不依赖父级 flex）", () => {
+    render(<KlineChart klines={klines} symbol="600519" />);
+    const container = screen.getByTestId("kline-container");
+    expect(container.className).not.toContain("lg:flex-1");
+    expect(container.className).toContain("h-[22rem]");
+  });
+});

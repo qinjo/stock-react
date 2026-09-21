@@ -46,3 +46,18 @@ describe("AnalysisReport", () => {
     expect(screen.getByText("（模型未提供结论）")).toBeInTheDocument();
   });
 });
+
+describe("AnalysisReport 的宽度策略", () => {
+  it("卡片全宽但正文限宽（超宽屏上长行难读）", () => {
+    render(<AnalysisReport sections={sections} />);
+    expect(screen.getByText("贵州茅台，白酒龙头。").className).toContain("max-w-4xl");
+    expect(screen.getByText("维持增持，目标区间 1300-1400。").className).toContain("max-w-4xl");
+    expect(screen.getByRole("list").className).toContain("max-w-4xl");
+  });
+
+  it("正文限宽不影响卡片容器的全宽", () => {
+    const { container } = render(<AnalysisReport sections={sections} />);
+    const article = container.querySelector("article")!;
+    expect(article.className).not.toContain("max-w-4xl");
+  });
+});

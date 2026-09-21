@@ -67,7 +67,7 @@ export default function RatingCard({ analysis, model, analyzedAt, fromCache, usa
         />
       </div>
 
-      <p className="mt-3 text-sm text-slate-800">{analysis.reasoning}</p>
+      <p className="mt-3 max-w-4xl text-sm text-slate-800">{analysis.reasoning}</p>
 
       <div className="mt-3 space-y-0.5 text-xs text-slate-400">
         <p>

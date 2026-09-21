@@ -18,6 +18,12 @@ type Props = {
   klines: Kline[];
   /** 标的变化时触发重载（如 600519） */
   symbol: string;
+  /**
+   * 宽屏下让图表填满左栏剩余高度（左栏为 flex 列布局时使用）。
+   * 这样左栏总高恰好等于视口高度，不会出现「左栏内部滚动条」。
+   * 窄屏仍用固定高度，避免非 flex 容器里 flex-1 失效导致塌陷。
+   */
+  fillHeight?: boolean;
 };
 
 /**
@@ -25,7 +31,7 @@ type Props = {
  * v10 无 applyNewData：通过 setDataLoader 的 getBars 回调按需供给数据，
  * 数据经 ref 读取最新值，避免初始化闭包拿到旧数组。
  */
-export default function KlineChart({ klines, symbol }: Props) {
+export default function KlineChart({ klines, symbol, fillHeight = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const dataRef = useRef<KLineData[]>([]);
@@ -73,15 +79,27 @@ export default function KlineChart({ klines, symbol }: Props) {
     if (!chart) return;
     chart.setSymbol({ ticker: symbol, pricePrecision: 2, volumePrecision: 0 });
     chart.setPeriod({ type: "day", span: 1 });
+    // 弹性高度布局下列表变高变矮不触发 window resize，需主动重算
+    chart.resize();
   }, [symbol, klines]);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section
+      className={`rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${
+        fillHeight ? "lg:flex lg:min-h-0 lg:flex-col" : ""
+      }`}
+    >
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-slate-700">日 K 走势（前复权）</h2>
         <span className="text-xs text-slate-400">MA50 / MA200</span>
       </div>
-      <div ref={containerRef} className="mt-2 h-[22rem] w-full" data-testid="kline-container" />
+      <div
+        ref={containerRef}
+        className={`mt-2 w-full ${
+          fillHeight ? "h-[22rem] lg:h-auto lg:min-h-[12rem] lg:flex-1" : "h-[22rem]"
+        }`}
+        data-testid="kline-container"
+      />
       {klines.length === 0 && (
         <p className="mt-2 text-sm text-slate-400">暂无 K 线数据</p>
       )}

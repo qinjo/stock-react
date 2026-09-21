@@ -125,9 +125,14 @@ export default function App() {
         */}
         {stock.kind === "success" && (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start">
-            <aside className="space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+            {/*
+              左栏在宽屏下高度贴合视口：flex 列 + 固定视口高度，
+              K 线图吃掉剩余空间（fillHeight），从而不出现「左栏内部滚动条」；
+              overflow-y-auto 仅作极矮视口的兜底。
+            */}
+            <aside className="space-y-6 lg:sticky lg:top-6 lg:flex lg:h-[calc(100vh-3rem)] lg:flex-col lg:gap-6 lg:space-y-0 lg:self-start lg:overflow-y-auto">
               <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
-              <KlineChart klines={stock.klines} symbol={stock.candidate.code} />
+              <KlineChart klines={stock.klines} symbol={stock.candidate.code} fillHeight />
               {stock.indicators && <IndicatorPanel indicators={stock.indicators} />}
             </aside>
 
