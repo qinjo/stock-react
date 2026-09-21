@@ -81,7 +81,7 @@ export default function KlineChart({ klines, symbol }: Props) {
         <h2 className="text-sm font-medium text-slate-700">日 K 走势（前复权）</h2>
         <span className="text-xs text-slate-400">MA50 / MA200</span>
       </div>
-      <div ref={containerRef} className="mt-2 h-80 w-full" data-testid="kline-container" />
+      <div ref={containerRef} className="mt-2 h-[22rem] w-full" data-testid="kline-container" />
       {klines.length === 0 && (
         <p className="mt-2 text-sm text-slate-400">暂无 K 线数据</p>
       )}

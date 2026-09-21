@@ -79,15 +79,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
+      <header className="border-b border-slate-200 bg-white px-6 py-4 lg:px-10">
         <h1 className="text-xl font-semibold">A股智能分析</h1>
         <p className="mt-1 text-sm text-slate-500">
           输入股票代码或名称，获取行情、技术指标与 AI 分析
         </p>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <main className="w-full space-y-6 px-6 py-8 lg:px-10">
+        <div className="max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <SearchBox onSelect={handleSelect} disabled={stock.kind === "loading"} />
         </div>
 
@@ -124,7 +124,7 @@ export default function App() {
           窄屏（<lg）自动降级为单列堆叠。
         */}
         {stock.kind === "success" && (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start">
             <aside className="space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
               <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
               <KlineChart klines={stock.klines} symbol={stock.candidate.code} />
@@ -143,7 +143,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="mx-auto max-w-7xl space-y-2 px-6 pb-8 text-xs text-slate-400">
+      <footer className="w-full space-y-2 px-6 pb-8 text-xs text-slate-400 lg:px-10">
         <p className="rounded border border-slate-200 bg-white px-3 py-2 text-slate-500">
           ⚠️ 本页所有分析由 AI 生成，仅供学习与研究参考，<strong>不构成任何投资建议</strong>。
           数据来自公开免费接口，可能存在延迟或错误，请以交易所披露为准。
