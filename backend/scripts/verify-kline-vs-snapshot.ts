@@ -2,8 +2,8 @@
 /**
  * 本地日K库的对账与自检。
  *
- *   npm run verify:kline                        # 默认抽样
- *   npm run verify:kline -- --sample 400
+ *   npm run verify:kline                        # 默认**全量**（全部在市标的）
+ *   npm run verify:kline -- --sample 400         # 赶时间时可抽样
  *   npm run verify:kline -- --codes sh600519,sz300750
  *   npm run verify:kline -- --date 20260925
  *
@@ -13,7 +13,7 @@
  *
  * 两条判据，都不依赖可比口径的外部历史数据：
  *
- * 1. **VWAP 内部一致性（全市场抽样）**：当日成交额 ÷（成交量 × 100）必然落在当日
+ * 1. **VWAP 内部一致性（默认全量）**：当日成交额 ÷（成交量 × 100）必然落在当日
  *    [最低, 最高] 区间内。这条恒等式同时约束了价、量、额三个字段的**单位与方向**，
  *    任何一个换算错都会立刻越界。
  * 2. **跨日价格对账（外部源）**：腾讯批量快照的「昨收」是交易所口径的（除权后）前收盘。
@@ -62,7 +62,9 @@ function parseArgs(argv: string[]): Options {
     db: DEFAULT_DB,
     date: null,
     codes: DEFAULT_CODES,
-    sample: 300,
+    // 0 = 全量。全表扫描只要 1~2 秒（不变式检查已证明），
+    // 而这个检查的意义正是抓**罕见的**坏行——抽样等于主动放过它们。
+    sample: 0,
     skipLive: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -128,7 +130,7 @@ async function fetchSnapshot(symbols: string[]): Promise<Map<string, Snapshot>> 
   return out;
 }
 
-/** 判据一：全市场抽样的 VWAP 内部一致性。 */
+/** 判据一：VWAP 内部一致性（默认全量，可用 --sample 抽样）。 */
 function checkVwapConsistency(
   store: MarketStore,
   date: number,
@@ -138,7 +140,8 @@ function checkVwapConsistency(
   degenerate: number;
   failures: Array<{ code: string; vwap: number; low: number; high: number }>;
 } {
-  const codes = store.sampleLiveCodes(sampleSize);
+  // 0 表示全量：sampleLiveCodes 在 limit ≥ 总数时返回全部
+  const codes = store.sampleLiveCodes(sampleSize > 0 ? sampleSize : Number.MAX_SAFE_INTEGER);
   const failures: Array<{ code: string; vwap: number; low: number; high: number }> = [];
   let checked = 0;
   let degenerate = 0;
@@ -217,7 +220,7 @@ async function main(): Promise<void> {
     // ── 判据一
     const vwap = checkVwapConsistency(store, date, opts.sample);
     console.log(
-      `\n[1] VWAP 内部一致性（抽样 ${vwap.checked} 只，另有一字板 ${vwap.degenerate} 只无区间可校验）`,
+      `\n[1] VWAP 内部一致性（校验 ${vwap.checked} 只，另有一字板 ${vwap.degenerate} 只无区间可校验）`,
     );
     if (vwap.failures.length === 0) {
       console.log("    ✓ 全部落在当日价格区间内（价 / 量 / 额的单位与方向自洽）");
