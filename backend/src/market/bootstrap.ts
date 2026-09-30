@@ -110,7 +110,6 @@ export function buildInstrumentRows(
   latestDate: string,
 ): Map<string, InstrumentRow> {
   const meta = new Map<string, InstrumentRow>();
-  const byCode = new Map<string, InstrumentRow>();
   for (const item of instruments) {
     const parsed = parseQlibSymbol(item.symbol);
     const row: InstrumentRow = {
@@ -123,9 +122,7 @@ export function buildInstrumentRows(
       isLive: item.end === latestDate,
     };
     meta.set(parsed.dirName, row);
-    byCode.set(parsed.code, row);
   }
-  // meta 的值与 byCode 的值是同一批对象引用，改一处即可
   return meta;
 }
 

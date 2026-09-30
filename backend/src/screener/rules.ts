@@ -84,8 +84,32 @@ const yi = (yuan: number | null | undefined): string =>
 const wan = (yuan: number | null | undefined): string =>
   yuan === null || yuan === undefined ? "—" : `${(yuan / 1e4).toFixed(0)}万`;
 
+/**
+ * 位置类规则只在均线模式适用。
+ *
+ * 源书第六章明确以「MA100 之下的低位涨停」为**优选**，与第一章「只买入价格运行在
+ * MA100 均线之上的股票」互斥；两者强行共用一个基础池，会让 S10（作者称最强的信号）
+ * 永远无法触发。事件模式改用事件自身的排除条款
+ * （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
+ *
+ * 四条文规则共用同一份理由——先前把它逐条粘了四遍，改一处就会漏三处。
+ */
+const POSITION_RULES_MODES: ScreenerMode[] = ["trend"];
+
 export const RULES: readonly Rule[] = [
   /* ----------------------------- 硬性排除层 ----------------------------- */
+  {
+    // 必须排在最前：下面多条规则会读 `bars.at(-1)`，
+    // 空序列进去就是 TypeError。显式挡在这里，比在每条规则里散落空值判断干净。
+    id: "E-noBars",
+    label: "剔除库内无日线的标的",
+    stage: "exclusions",
+    source: "offbook",
+    evaluate: ({ bars }) =>
+      bars.length === 0
+        ? fail("库内没有该标的的日线（退市、长期停牌或上市但未取到数据）")
+        : ok(`${bars.length} 根日线`),
+  },
   {
     id: "E-live",
     label: "剔除已退市 / 长期停牌",
@@ -211,11 +235,7 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L597",
-    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
-    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
-    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
-    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
-    modes: ["trend"],
+    modes: POSITION_RULES_MODES,
     evaluate: ({ adjBars, ma100 }) => {
       const lastIndex = adjBars.length - 1;
       const ma = ma100[lastIndex];
@@ -266,11 +286,7 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L663",
-    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
-    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
-    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
-    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
-    modes: ["trend"],
+    modes: POSITION_RULES_MODES,
     evaluate: ({ adjBars, ma100, params }) => {
       const closes = adjBars.map((bar) => bar.close);
       const crossings = countCrossings(closes, ma100, 20);
@@ -377,11 +393,7 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L585",
-    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
-    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
-    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
-    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
-    modes: ["trend"],
+    modes: POSITION_RULES_MODES,
     evaluate: ({ adjBars, params }) => {
       const line = fallingTrendlineAt(adjBars, params.swingWindow, params.trendlineLookback);
       const close = adjBars[adjBars.length - 1]?.close;
@@ -397,11 +409,7 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L627",
-    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
-    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
-    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
-    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
-    modes: ["trend"],
+    modes: POSITION_RULES_MODES,
     evaluate: ({ adjBars, params }) => {
       const bounds = rangeBounds(adjBars, params.rangeWindow);
       const close = adjBars[adjBars.length - 1]?.close;

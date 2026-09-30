@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MarketStore, type BarRow, type InstrumentRow } from "../src/market/store.js";
 import { loadUniverseFromStore } from "../src/screener/load.js";
+import { screenUniverse } from "../src/screener/engine.js";
 
 /**
  * 库 → 引擎的适配层：用临时文件里的真 SQLite 测（无网络、无 mock）。
@@ -63,11 +64,18 @@ describe("loadUniverseFromStore", () => {
     expect(loaded[0]?.bars.map((b) => b.close)).toEqual([11.3, 11.35]);
   });
 
-  it("没有日线的标的被跳过（而不是产出空序列让引擎去猜）", () => {
+  it("没有日线的标的照样吐出，由引擎的第一条规则显式挡下", () => {
     store.upsertInstruments([instrument("000001"), instrument("000002")]);
     store.insertBars("000002", [bar(20260929, 10)]);
 
-    expect([...loadUniverseFromStore(store)].map((s) => s.code)).toEqual(["000002"]);
+    // 适配层不替引擎做决定：全部吐出，否则漏斗第一档会悄悄少算
+    expect([...loadUniverseFromStore(store)].map((s) => s.code)).toEqual(["000001", "000002"]);
+
+    // 空序列由 E-noBars 挡在排除层（且它是第一条，后面读 bars.at(-1) 的规则不会被触发）
+    const outcome = screenUniverse(loadUniverseFromStore(store));
+    expect(outcome.funnel.universe).toBe(2);
+    expect(outcome.funnel.afterExclusions).toBe(1);
+    expect(outcome.shortlisted).toEqual([]);
   });
 
   it("只读最近 barsLimit 根，且保持升序", () => {

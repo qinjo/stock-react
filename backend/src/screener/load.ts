@@ -27,15 +27,10 @@ export function* loadUniverseFromStore(
   for (const row of store.listInstruments()) {
     if (options.codeFilter && !options.codeFilter(row)) continue;
     const bars = asOf === undefined ? store.readBars(row.code, barsLimit) : store.readBarsUpTo(row.code, asOf, barsLimit);
-    // 库内没有日线的标的（退市、长期停牌、上市但未取到数据）在这里跳过：
-    // 规则层会读 `bars.at(-1)`，空序列进去会崩。
-    //
-    // **已知口径偏差**：因此漏斗第一档 `universe` 数的是"有日线的标的"，
-    // 比 `instruments` 表的总数少（实测 5556 vs 6159）。差额全部是退市/无数据标的，
-    // 它们本来也不该进候选；但第一档的数字确实不等于全市场标的数。
-    // 要修得先把规则层的空序列路径处理干净，见 #26 的验收记录。
-    if (bars.length === 0) continue;
-    const lastBarDate = (bars[bars.length - 1] as { date: number }).date;
+    // 没有日线的标的**照样吐出去**：`universe` 是"全市场有多少只标的"，
+    // 在这里跳过会让漏斗第一档悄悄少算（实测 5556 vs 6159）。
+    // 空序列由规则层的第一条 `E-noBars` 显式挡下，因此计数可解释。
+    const lastBarDate = bars.length > 0 ? (bars[bars.length - 1] as { date: number }).date : null;
     yield {
       code: row.code,
       name: row.name,
@@ -44,7 +39,7 @@ export function* loadUniverseFromStore(
       // 市值来自行情快照（每日增量刷新）；未接过快照时为 null，
       // 引擎会把市值闸门标为"未生效"并如实上报，而不是假装它开着
       floatMarketCap: row.floatMarketCap ?? null,
-      tradedOnLatestDay: latestTradeDate !== null && lastBarDate === latestTradeDate,
+      tradedOnLatestDay: latestTradeDate !== null && lastBarDate !== null && lastBarDate === latestTradeDate,
       bars,
     };
   }
