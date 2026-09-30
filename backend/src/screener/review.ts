@@ -179,12 +179,16 @@ export function applyReview(response: ScreenResponse, review: ReviewOutcome): Sc
     return a.index - b.index;
   });
 
+  const candidates = withIndex.map(({ candidate }) => ({
+    ...candidate,
+    reasoning: reasons.get(candidate.code) ?? candidate.reasoning,
+  }));
+
   return {
     ...response,
-    candidates: withIndex.map(({ candidate }) => ({
-      ...candidate,
-      reasoning: reasons.get(candidate.code) ?? candidate.reasoning,
-    })),
+    candidates,
+    // 漏斗的最后一档：复核过了几只。降级时为 0，而 signalEligible 不动
+    funnel: { ...response.funnel, reviewed: candidates.filter((c) => c.reasoning !== null).length },
     degraded: { llmReview: review.degraded, reason: review.reason },
   };
 }

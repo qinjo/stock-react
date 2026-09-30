@@ -189,6 +189,14 @@ export type FunnelCounts = {
    * 基础池回答"能不能买"，信号层回答"现在是不是买点"——两者是不同的筛子。
    */
   signalEligible: number;
+  /**
+   * 通过大模型复核的数量。
+   *
+   * 引擎是纯函数、不碰模型，所以这一档由编排层在复核之后补上；
+   * 降级（模型不可用）时为 0，而 `signalEligible` 保持不变——
+   * "本档愿不愿意做"与"复核看没看"是两件事。
+   */
+  reviewed?: number;
 };
 
 export type ScreenOutcome = {

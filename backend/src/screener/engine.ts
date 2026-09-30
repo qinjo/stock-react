@@ -1,6 +1,6 @@
 import { DEFAULT_CRITERIA, paramsFor } from "./params.js";
 import { RULES, barsSinceMa100Cross, buildContext, evaluateRules } from "./rules.js";
-import { trendR2 } from "./structure.js";
+import { officialChangePercent, trendR2 } from "./structure.js";
 import { evaluateSignals } from "./signals.js";
 import type {
   FunnelCounts,
@@ -29,10 +29,8 @@ function metricsOf(ctx: ReturnType<typeof buildContext>): ScreenMetrics {
 
   return {
     lastClose: lastBar?.close ?? null,
-    changePercent:
-      lastBar && prevBar && prevBar.close > 0
-        ? ((lastBar.close - prevBar.close) / prevBar.close) * 100
-        : null,
+    // 按交易所口径的昨收算（除权日昨收会被下调，见 officialChangePercent）
+    changePercent: officialChangePercent(lastBar, prevBar),
     ma100,
     ma100Deviation: ma100 !== null && close !== null && ma100 !== 0 ? (close - ma100) / ma100 : null,
     barsSinceMa100Cross: barsSinceMa100Cross(

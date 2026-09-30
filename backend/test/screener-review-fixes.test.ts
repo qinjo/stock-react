@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_CRITERIA, paramsFor } from "../src/screener/params.js";
 import { buildContext, RULES } from "../src/screener/rules.js";
 import { evaluateTrendSignals } from "../src/screener/signals.js";
-import { detectUpwardGap } from "../src/screener/structure.js";
+import { detectUpwardGap, officialChangePercent } from "../src/screener/structure.js";
 import { rankShortlist } from "../src/screener/response.js";
 import { screenUniverse } from "../src/screener/engine.js";
 import { bars, goodSecurity } from "./helpers/screener-fixtures.js";
@@ -156,5 +156,36 @@ describe("P17：三档对信号档位的取舍", () => {
     const standard = screenUniverse([security()], { ...DEFAULT_CRITERIA, strictness: "standard" });
     expect(standard.shortlisted[0]?.exit.stop).toBe(loose.shortlisted[0]?.exit.stop);
     expect(standard.shortlisted[0]?.signals.bestTier).toBe(4);
+  });
+});
+
+/* ------------------- 除权日的涨跌幅口径（#26 审查 C1） ------------------- */
+
+describe("officialChangePercent：按交易所口径的昨收", () => {
+  const day = (close: number, adjFactor: number, date = 20260929) => ({
+    date,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: 1,
+    amount: 1,
+    adjFactor,
+  });
+
+  it("非除权日：等价于直接用昨日收盘", () => {
+    expect(officialChangePercent(day(11, 1, 20260930), day(10, 1))).toBeCloseTo(10, 6);
+  });
+
+  it("除权日：按被下调过的昨收算，而不是除权前的收盘", () => {
+    // 库内昨收 10、因子 1；今日因子变 2 → 快照昨收 = 10 × (1/2) = 5
+    // 今日收盘 5.5 → 真实涨幅 +10%；直接用库内昨收会算成 −45%
+    expect(officialChangePercent(day(5.5, 2, 20260930), day(10, 1))).toBeCloseTo(10, 6);
+  });
+
+  it("缺根或昨收非正时返回 null，而不是算出 Infinity", () => {
+    expect(officialChangePercent(undefined, day(10, 1))).toBeNull();
+    expect(officialChangePercent(day(11, 1, 20260930), undefined)).toBeNull();
+    expect(officialChangePercent(day(11, 1, 20260930), day(0, 1))).toBeNull();
   });
 });

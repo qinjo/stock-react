@@ -435,6 +435,27 @@ export function drawdownInWindow(bars: readonly DailyBar[], window: number): num
   return worst;
 }
 
+/**
+ * 涨跌幅，按**交易所口径的昨收**计算。
+ *
+ * 交易所的昨收在除权日会被下调，而库内上一根存的是不复权价（除权前）。
+ * 由增量阶段确立的关系 `新因子 = 旧因子 × (库内昨收 / 快照昨收)` 反推：
+ *     快照昨收 = 库内昨收 × (旧因子 / 新因子)
+ * 非除权日两个因子相同，退化为直接用昨日收盘。
+ *
+ * 不这么算的话，除权日会显示一个虚高的跌幅——实测每次增量有约 42 只除权股。
+ */
+export function officialChangePercent(
+  lastBar: DailyBar | undefined,
+  prevBar: DailyBar | undefined,
+): number | null {
+  if (!lastBar || !prevBar || prevBar.close <= 0) return null;
+  const factorRatio = prevBar.adjFactor > 0 ? prevBar.adjFactor / lastBar.adjFactor : 1;
+  const prevClose = prevBar.close * factorRatio;
+  if (prevClose <= 0) return null;
+  return ((lastBar.close - prevClose) / prevClose) * 100;
+}
+
 /* ------------------------------- 涨停判定 ------------------------------- */
 
 /** 各板块的涨停幅度。北交所 30%，创业板/科创板 20%，其余 10%。 */

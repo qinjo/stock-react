@@ -333,6 +333,12 @@ function ResultView({
           漏斗：全市场 {funnel.universe} → 排除池 {funnel.afterExclusions} → 硬门槛{" "}
           {funnel.afterHardFilters} → 基础池 {funnel.shortlisted} → 有信号{" "}
           <span className="font-medium text-slate-700">{funnel.signalEligible}</span>
+          {funnel.reviewed !== undefined && (
+            <>
+              {" "}
+              → 复核 <span className="font-medium text-slate-700">{funnel.reviewed}</span>
+            </>
+          )}
           {data.fromCache && <span className="ml-2 text-slate-400">· 来自当日缓存</span>}
         </p>
 
@@ -392,7 +398,13 @@ function ResultView({
       ) : (
         <ul className="space-y-2">
           {data.candidates.map((candidate) => (
-            <CandidateCard key={candidate.code} candidate={candidate} mode={data.params.mode} onPick={onPick} />
+            <CandidateCard
+              key={candidate.code}
+              candidate={candidate}
+              mode={data.params.mode}
+              unreviewed={data.degraded.llmReview}
+              onPick={onPick}
+            />
           ))}
         </ul>
       )}
@@ -609,10 +621,13 @@ function tierLabel(mode: ScreenMode, tier: number): string {
 function CandidateCard({
   candidate,
   mode,
+  unreviewed,
   onPick,
 }: {
   candidate: ScreenCandidate;
   mode: ScreenMode;
+  /** 本次结果未经大模型复核（降级）——每条候选都要自己标出来，而不只靠页面顶部一次提示 */
+  unreviewed: boolean;
   onPick: (target: { code: string; name: string }) => void;
 }) {
   const { metrics, exit } = candidate;
@@ -735,6 +750,8 @@ function CandidateCard({
 
       <p className="mt-2 text-[11px] text-slate-400">
         规则生成，非投资建议。命中 {candidate.ruleHits.length} 条规则判定。
+        {/* 与顶部横幅用同一句话，避免同一件事两种说法 */}
+        {unreviewed && <span className="ml-1 text-amber-700">· 未经大模型复核</span>}
       </p>
     </li>
   );

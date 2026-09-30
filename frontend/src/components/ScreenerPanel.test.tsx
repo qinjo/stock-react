@@ -321,7 +321,7 @@ describe("ScreenerPanel 结果呈现", () => {
     render(<ScreenerPanel onPick={() => {}} />);
     await runScreen();
 
-    expect(await screen.findByText(/未经大模型复核/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/未经大模型复核/)).length).toBeGreaterThan(0);
   });
 
   it("点候选股把代码与名称交给上层（切回单票分析）", async () => {
@@ -741,7 +741,7 @@ describe("AI 档内复核与降级（#21）", () => {
     render(<ScreenerPanel onPick={() => {}} />);
     await runScreen();
 
-    const notice = await screen.findByText(/未经大模型复核/);
+    const [notice] = await screen.findAllByText(/未经大模型复核/);
     expect(notice.textContent).toContain("429");
     expect(screen.queryByText("AI 复核")).not.toBeInTheDocument();
     // 候选仍然照常展示——模型挂掉丢的只是"复核"，不是数据
@@ -852,5 +852,48 @@ describe("切换模式或严格度时旧结果立即作废", () => {
 
     await user.click(screen.getByRole("button", { name: "严格" }));
     expect(screen.queryByText("贵州茅台")).not.toBeInTheDocument();
+  });
+});
+
+/* ------------- 漏斗复核档 + 逐条未复核标记（#26 审查 A3/A6） ------------- */
+
+describe("漏斗复核档与逐条未复核标记（#26 审查 A3/A6）", () => {
+  it("漏斗展示到「复核」这一档", async () => {
+    stubFetch({
+      ok: true,
+      body: {
+        ...success,
+        funnel: { ...success.funnel, reviewed: 1 },
+        degraded: { llmReview: false, reason: null },
+      },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+    expect(await screen.findByText(/→ 复核/)).toBeInTheDocument();
+  });
+
+  it("降级时每条候选自己标出「未经 AI 复核」，而不只靠顶部一次提示", async () => {
+    stubFetch({
+      ok: true,
+      body: {
+        ...success,
+        candidates: [{ ...success.candidates[0], reasoning: null }],
+        degraded: { llmReview: true, reason: "模型不可用" },
+      },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    // 顶部一次 + 候选卡片上各一次
+    const marks = await screen.findAllByText(/未经大模型复核/);
+    expect(marks.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("复核成功时不在卡片上出现「未经 AI 复核」", async () => {
+    stubFetch({ ok: true, body: { ...success, degraded: { llmReview: false, reason: null } } });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+    await screen.findByText("贵州茅台");
+    expect(screen.queryByText(/未经大模型复核/)).not.toBeInTheDocument();
   });
 });

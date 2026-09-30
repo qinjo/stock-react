@@ -348,6 +348,8 @@ export type ScreenFunnel = {
   shortlisted: number;
   /** 通过信号层与止损空间闸门的数量 */
   signalEligible: number;
+  /** 通过大模型复核的数量；降级时为 0 */
+  reviewed?: number;
 };
 
 export type ScreenMode = "trend" | "event";
