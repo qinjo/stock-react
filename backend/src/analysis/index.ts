@@ -1,4 +1,4 @@
-import { buildAnalysisPrompt } from "./prompt.js";
+import { buildAnalysisPrompt, buildShortTermPrompt } from "./prompt.js";
 import { parseAnalysis } from "./parse.js";
 import { PromptCache } from "../cache.js";
 import type { ChatFn } from "./llm.js";
@@ -31,14 +31,19 @@ export type RunAnalysisDeps = {
  * 绝不静默降级为「中性」结论（看空 ≠ 无法判断会污染信号语义）。
  * abstain 结果不写入缓存，避免偶发失败在 TTL 内被持续复用。
  */
+/** 分析视角：通用投研 / 短线操盘（筛选器用后者）。 */
+export type AnalysisView = "general" | "short";
+
 export async function runAnalysis(
   input: AnalysisInput,
   deps: RunAnalysisDeps,
+  options: { view?: AnalysisView } = {},
 ): Promise<AnalysisOutcome> {
-  const prompt = buildAnalysisPrompt(input);
+  const view = options.view ?? "general";
+  const prompt = view === "short" ? buildShortTermPrompt(input) : buildAnalysisPrompt(input);
   // 键取「股票 + 交易日」而非提示词全文哈希：盘中行情逐秒变化会让全文哈希永不命中
-  // （详见 cache.ts 的键设计说明）
-  const cacheKey = PromptCache.keyFor(input.code, input.dataDate);
+  // （详见 cache.ts 的键设计说明）。**视角必须进键**——否则短线报告会被通用请求命中。
+  const cacheKey = PromptCache.keyFor(view, `${input.code}:${input.dataDate}`);
 
   const cached = deps.cache?.get(cacheKey);
   if (cached) {
@@ -58,7 +63,12 @@ export async function runAnalysis(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const { content, usage } = await deps.chat(prompt);
-      const analysis = parseAnalysis(content);
+      const parsed = parseAnalysis(content);
+      // 短线视角**一律**抹掉目标价：模型偶尔仍会编一个，而书里没有这个概念
+      const analysis =
+        view === "short"
+          ? { ...parsed, priceTarget: null, priceTargetBasis: null }
+          : parsed;
       const analyzedAt = (deps.now?.() ?? new Date()).toISOString();
       deps.cache?.set(cacheKey, { analysis, model: deps.model, analyzedAt, usage });
       return { status: "ok", analysis, model: deps.model, analyzedAt, fromCache: false, usage };

@@ -75,9 +75,16 @@ export async function buildAnalysisInput(code: string): Promise<AnalysisInput> {
  * 缓存与前端属于 T5；此端点先提供可 curl 的完整编排能力。
  */
 export async function analyzeRoutes(app: FastifyInstance, deps: AnalyzeDeps): Promise<void> {
-  app.get<{ Querystring: { code?: string } }>("/api/analyze", async (req) => {
+  app.get<{ Querystring: { code?: string; view?: string } }>("/api/analyze", async (req) => {
     const code = (req.query.code ?? "").trim();
     if (!code) throw new ApiError("INVALID_INPUT", "缺少 code 参数", 400);
+
+    // 视角：默认通用投研；view=short 走短线操盘框架（筛选器候选卡片的「深度分析」）
+    const rawView = (req.query.view ?? "general").trim();
+    if (rawView !== "general" && rawView !== "short") {
+      throw new ApiError("INVALID_INPUT", `view 只能是 general / short，收到「${rawView}」`, 400);
+    }
+    const view = rawView;
 
     if (!deps.chat) {
       throw new ApiError(
@@ -101,17 +108,21 @@ export async function analyzeRoutes(app: FastifyInstance, deps: AnalyzeDeps): Pr
       throw new ApiError("SOURCE_UNAVAILABLE", "行情数据源暂时不可用", 502);
     }
 
-    const outcome = await runAnalysis(input, {
-      chat: deps.chat,
-      model: deps.model,
-      cache: deps.cache,
-    });
+    const outcome = await runAnalysis(
+      input,
+      { chat: deps.chat, model: deps.model, cache: deps.cache },
+      { view },
+    );
 
     if (outcome.status === "abstained") {
       // 数据不足与调用失败要可区分（abstain 契约）
       throw new ApiError("ANALYSIS_FAILED", outcome.detail, 502);
     }
 
-    return { ...outcome, input: { code: input.code, name: input.name, dataDate: input.dataDate } };
+    return {
+      ...outcome,
+      view,
+      input: { code: input.code, name: input.name, dataDate: input.dataDate },
+    };
   });
 }

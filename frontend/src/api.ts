@@ -57,9 +57,15 @@ export function getKline(code: string, limit = 60): Promise<Kline[]> {
 
 /* ------------------------------ 分析（T5） ------------------------------ */
 
-/** 请求 AI 分析。数据不足/分析失败会以 ApiError(code) 抛出，由 UI 分流展示。 */
-export function getAnalysis(code: string): Promise<AnalyzeResponse> {
-  return request<AnalyzeResponse>(`/api/analyze?code=${encodeURIComponent(code)}`);
+/**
+ * 请求 AI 分析。数据不足/分析失败会以 ApiError(code) 抛出，由 UI 分流展示。
+ *
+ * `view="short"` 走短线操盘框架（筛选器候选卡片上的「深度分析」）：判据是
+ * MA100 位置 / 结构形态 / 离场条件 / 仓位建议，**不出目标价**。
+ */
+export function getAnalysis(code: string, view: "general" | "short" = "general"): Promise<AnalyzeResponse> {
+  const suffix = view === "short" ? "&view=short" : "";
+  return request<AnalyzeResponse>(`/api/analyze?code=${encodeURIComponent(code)}${suffix}`);
 }
 
 /** 派生技术指标（后端已算好，前端只做展示）。 */

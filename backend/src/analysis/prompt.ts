@@ -360,3 +360,65 @@ ${buildDataLimits(input)}
 
   return { system: SYSTEM_PROMPT, user };
 }
+
+/* ------------------------ 短线操盘视角（筛选器） ------------------------ */
+
+/**
+ * 短线视角的提示词（源书《短线操盘实战技法》的判据框架）。
+ *
+ * 与通用投研视角的**唯一但关键**差别：**不出目标价**。
+ * 源书的逻辑是"跟随趋势直到结构被破坏"，而不是"到价卖出"——
+ * 给一个数字会暗示预测能力，而书里根本没有这个概念。
+ * 相应地，结论落在「离场条件 + 仓位」而不是「目标价 + 时间窗」。
+ */
+export const SHORT_TERM_SYSTEM_PROMPT = [
+  "你是一名只做短线（持股 2–5 个交易日）的 A 股操盘手，判断依据来自《短线操盘实战技法》这套方法。",
+  "这套方法的判据只有两样：**均线位置**与**结构位置**。作者明确不研究成交量、不使用 KDJ/RSI/布林线，",
+  "因此不要用量能指标、震荡指标或基本面来支撑结论——那些不属于这套方法。",
+  "",
+  "你必须依次回答四件事：",
+  "1. **MA100 位置**：收盘价在 MA100 之上还是之下、偏离多少；这是这套方法的选股分界线。",
+  "2. **结构形态**：有没有低位 123 结构（低点3 高于低点1、突破高点2）、是否处在下降趋势线之下、是否在震荡区间内部。",
+  "3. **离场条件**：止损位取在哪（123 结构低点 / 均线配对 / 固定比例）、什么情况下信号失效。",
+  "4. **仓位建议**：按书的仓位表给出满仓 / 半仓 / 空仓，并说明依据。",
+  "",
+  "硬规则：",
+  "- **不要给出目标价**，也不要预测涨幅。这套方法不做到价卖出。",
+  "- 只用给定数据，不发明数字，不引入外部信息。",
+  "- 数据不足以支撑某一节时明确写「数据不足」，不要用常识填补。",
+  "- 全部用中文。",
+  "- 只输出 JSON，字段见用户消息末尾的契约说明。",
+].join("\n");
+
+/** 短线视角的输出契约（与通用视角共用同一套字段，但目标价必须为空）。 */
+export const SHORT_TERM_CONTRACT = [
+  "输出 JSON（不要多余文字）：",
+  "{",
+  '  "rating": "buy" | "overweight" | "hold" | "underweight" | "sell",',
+  '  "confidence": 0-100 的整数,',
+  '  "reasoning": "一句话结论，40 字以内",',
+  '  "price_target": null,            // 必须是 null：这套方法不设目标价',
+  '  "price_target_basis": null,      // 必须是 null',
+  '  "time_horizon": "预计持股 2-5 个交易日",',
+  '  "invalidation": { "price": 数值, "basis": "选取依据", "distance_percent": 数值 },',
+  '  "sections": {',
+  '    "snapshot": "①MA100 位置",',
+  '    "fundamentals": "②结构形态",',
+  '    "technicals": "③离场条件",',
+  '    "risks": ["④仓位建议与风险，逐条列出"]',
+  "  },",
+  '  "data_limits": ["本次判断受哪些数据限制"],',
+  '  "what_would_change_my_mind": "什么可观察信号会推翻该判断",',
+  '  "monitoring": ["需持续跟踪的指标与阈值"]',
+  "}",
+].join("\n");
+
+export function buildShortTermPrompt(input: AnalysisInput): { system: string; user: string } {
+  const general = buildAnalysisPrompt(input);
+  // 数据段与通用视角完全相同（行情 + 派生指标 + 日K），只是换框架与契约
+  const dataSection = general.user.split("【输出】")[0] ?? general.user;
+  return {
+    system: SHORT_TERM_SYSTEM_PROMPT,
+    user: `${dataSection}\n【输出】\n${SHORT_TERM_CONTRACT}`,
+  };
+}

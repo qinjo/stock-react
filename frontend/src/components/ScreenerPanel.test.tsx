@@ -748,3 +748,80 @@ describe("AI 档内复核与降级（#21）", () => {
     expect(screen.getByText("贵州茅台")).toBeInTheDocument();
   });
 });
+
+/* -------------------- 短线视角深度分析（#24） -------------------- */
+
+describe("短线视角深度分析（#24）", () => {
+  const report = {
+    status: "ok",
+    view: "short",
+    analysis: {
+      rating: "overweight",
+      confidence: 62,
+      reasoning: "站上 MA100 且形成低位 123，结构清晰",
+      priceTarget: null,
+      priceTargetBasis: null,
+      timeHorizon: "2-5 个交易日",
+      invalidation: { price: 1168.2, basis: "123 结构低点 3", distancePercent: -5.4 },
+      sections: {
+        snapshot: "收盘 1235.58，在 MA100（1180）之上，偏离 +4.7%",
+        fundamentals: "低位 123：低点3 1140 高于低点1 1120，已突破高点2",
+        technicals: "止损取结构低点 3 = 1168.20，跌破即结构破坏",
+        risks: ["仓位建议半仓：大盘站上 MA100 但三个月趋势不成立"],
+      },
+      dataLimits: [],
+      whatWouldChangeMyMind: "跌破低点 3",
+      monitoring: ["收盘与 MA100 的距离"],
+    },
+    model: "deepseek-chat",
+    analyzedAt: "2026-09-30T04:00:00.000Z",
+    fromCache: false,
+  };
+
+  function stubBoth() {
+    const spy = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/api/analyze") ? report : success;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(body),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", spy);
+    return spy;
+  }
+
+  it("不自动调用：首屏只有按钮，没有分析请求", async () => {
+    const fetchSpy = stubBoth();
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+    await screen.findByText("贵州茅台");
+
+    const analyzeCalls = fetchSpy.mock.calls.filter((c) => String(c[0]).includes("/api/analyze"));
+    expect(analyzeCalls).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "深度分析（短线视角）" })).toBeInTheDocument();
+  });
+
+  it("点击后按短线视角请求，并渲染四项判据且不出现目标价", async () => {
+    const fetchSpy = stubBoth();
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+    await screen.findByText("贵州茅台");
+
+    await user.click(screen.getByRole("button", { name: "深度分析（短线视角）" }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find((c) => String(c[0]).includes("/api/analyze"));
+      expect(call).toBeDefined();
+      expect(String(call?.[0])).toContain("view=short");
+    });
+
+    expect(await screen.findByText(/①MA100 位置/)).toBeInTheDocument();
+    expect(screen.getByText(/②结构形态/)).toBeInTheDocument();
+    expect(screen.getByText(/③离场条件/)).toBeInTheDocument();
+    expect(screen.getByText(/仓位建议半仓/)).toBeInTheDocument();
+    // 短线视角不给目标价
+    expect(document.body.textContent ?? "").not.toContain("目标价");
+  });
+});
