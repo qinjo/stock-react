@@ -347,3 +347,106 @@ describe("App 的基本面展示（不消耗 LLM）", () => {
     expect(screen.getByRole("button", { name: "开始 AI 分析" })).toBeInTheDocument();
   });
 });
+
+/* ------------------- 顶部模式切换与筛选器联通（#16） ------------------- */
+
+const screenIndicators = {
+  sampleSize: 250,
+  fromDate: "2025-09-10",
+  toDate: "2026-09-18",
+  sma50: 1300.97,
+  sma200: 1335.94,
+  priceVsSma50: -3.8,
+  priceVsSma200: -6.32,
+  ma: { ma5: 1268.4, ma10: 1275.2, ma20: 1282.61, ma60: 1310.5, ma100: 1327.42, ma120: 1330.1, ma144: 1333.2 },
+  priceVsMa100: -5.21,
+  weeklyMa20: 1298.76,
+  weeklySampleSize: 52,
+  rsi14: 37.02,
+  macd: { dif: -11.45, dea: -6.12, hist: -5.33 },
+  atr14: 19.27,
+  atrPercent: 1.54,
+  return20d: -4.07,
+  return60d: 4.74,
+  volatility20d: 12.98,
+  periodHigh: 1539.98,
+  periodLow: 1151.01,
+  positionInRange: 25.9,
+};
+
+const screenBody = {
+  status: "ok",
+  dataDate: "2026-09-29",
+  refreshedAt: "2026-09-30T08:00:00.000Z",
+  params: {
+    mode: "trend",
+    strictness: "standard",
+    boards: ["main", "growth", "star"],
+    ignoreMarketGate: false,
+    refresh: false,
+  },
+  funnel: { universe: 6030, afterExclusions: 5202, afterHardFilters: 5034, shortlisted: 824 },
+  candidateTotal: 1,
+  candidates: [
+    {
+      code: "600519",
+      name: "贵州茅台",
+      price: 1235.58,
+      changePercent: -0.67,
+      metrics: {
+        lastClose: 1235.58,
+        changePercent: -0.67,
+        ma100: 1180.2,
+        ma100Deviation: 0.0469,
+        barsSinceMa100Cross: 0,
+        trendR2: 0.93,
+        floatMarketCap: null,
+        turnoverAmount: 3260000000,
+      },
+      ruleHits: [],
+      deductions: [],
+    },
+  ],
+  inactiveRules: [],
+  degraded: { llmReview: true, reason: "大模型复核尚未接入，当前结果全部来自确定性规则" },
+};
+
+describe("顶部模式切换与筛选器联通（#16）", () => {
+  it("切到筛选器后不再显示单票分析的搜索框", async () => {
+    stubRoutes([["/api/health", health]]);
+    render(<App />);
+    const user = userEvent.setup();
+
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "短线筛选器" }));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("筛选出候选后点它，切回单票分析并载入该股", async () => {
+    stubRoutes([
+      ["/api/health", health],
+      ["/api/screen", screenBody],
+      ["/api/quote", { quote }],
+      ["/api/kline", { klines }],
+      ["/api/indicators", { indicators: screenIndicators }],
+    ]);
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "短线筛选器" }));
+    await user.click(screen.getByRole("button", { name: "开始筛选" }));
+    await user.click(await screen.findByRole("button", { name: "贵州茅台" }));
+
+    // 已切回单票分析：页签状态与搜索结果一致，且行情面板出现
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "单票分析" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    // 该股的行情与图表真的被载入了（沿用既有成功路径的断言口径）
+    expect(await screen.findByText("17.65")).toBeInTheDocument();
+    expect(screen.getByTestId("kline-container")).toBeInTheDocument();
+  });
+});

@@ -3,14 +3,25 @@ import type { DailyBar, SecurityInput } from "../../src/screener/types.js";
 /**
  * 筛选器测试用的日线与标的构造器。
  *
- * 日期用递增整数即可——筛选引擎不解析日期（那是数据层与指标层的事），
- * 这样用例读起来只剩价格本身，不被日期噪音干扰。
+ * 日期是**真实的交易日**（跳过周末），而不是递增整数：筛选引擎自己不解析日期，
+ * 但接口层会把库内最新交易日渲染成 `YYYY-MM-DD` 返回给界面——
+ * 用假日期会让那一层测不出来（例如把 2025-03-00 当成合法日期）。
  */
 
-let dateCursor = 20250101;
+let cursor = new Date(Date.UTC(2024, 0, 1));
 
 export function resetDates(): void {
-  dateCursor = 20250101;
+  cursor = new Date(Date.UTC(2024, 0, 1));
+}
+
+/** 下一个交易日（跳过周六周日）。 */
+function nextTradingDate(): number {
+  do {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6);
+  return (
+    cursor.getUTCFullYear() * 10000 + (cursor.getUTCMonth() + 1) * 100 + cursor.getUTCDate()
+  );
 }
 
 export function bar(
@@ -18,7 +29,7 @@ export function bar(
   over: Partial<Omit<DailyBar, "date" | "close">> = {},
 ): DailyBar {
   return {
-    date: dateCursor++,
+    date: nextTradingDate(),
     open: over.open ?? close,
     high: over.high ?? close * 1.01,
     low: over.low ?? close * 0.99,

@@ -2,11 +2,15 @@ import {
   ApiError,
   type AnalyzeResponse,
   type ApiErrorBody,
+  type BoardName,
   type Fundamentals,
   type Indicators,
   type Kline,
   type Quote,
+  type ScreenMode,
+  type ScreenResponse,
   type SearchCandidate,
+  type Strictness,
 } from "./types";
 
 async function request<T>(url: string): Promise<T> {
@@ -70,4 +74,31 @@ export function getFundamentals(code: string): Promise<Fundamentals> {
   return request<{ fundamentals: Fundamentals }>(
     `/api/fundamentals?code=${encodeURIComponent(code)}`,
   ).then((d) => d.fundamentals);
+}
+
+/* --------------------------- 短线筛选器 (#16) --------------------------- */
+
+export type ScreenQuery = {
+  mode?: ScreenMode;
+  strictness?: Strictness;
+  boards?: BoardName[];
+  ignoreMarketGate?: boolean;
+  refresh?: boolean;
+  signal?: AbortSignal;
+};
+
+/**
+ * 全市场筛选。库未初始化时会以 `ApiError("DATA_NOT_READY")` 抛出，
+ * 由界面分流成"请先初始化"而不是"数据源不可用"。
+ */
+export function getScreen(query: ScreenQuery = {}): Promise<ScreenResponse> {
+  const search = new URLSearchParams();
+  if (query.mode) search.set("mode", query.mode);
+  if (query.strictness) search.set("strictness", query.strictness);
+  if (query.boards) search.set("boards", query.boards.join(","));
+  if (query.ignoreMarketGate) search.set("ignoreMarketGate", "true");
+  if (query.refresh) search.set("refresh", "true");
+
+  const suffix = search.toString();
+  return request<ScreenResponse>(`/api/screen${suffix ? `?${suffix}` : ""}`);
 }

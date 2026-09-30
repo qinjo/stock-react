@@ -1,5 +1,6 @@
 import { DEFAULT_CRITERIA, paramsFor } from "./params.js";
 import { RULES, barsSinceMa100Cross, buildContext, evaluateRules } from "./rules.js";
+import { trendR2 } from "./structure.js";
 import type {
   FunnelCounts,
   ScreenMetrics,
@@ -22,14 +23,21 @@ function metricsOf(ctx: ReturnType<typeof buildContext>): ScreenMetrics {
   const ma100 = ctx.ma100[lastIndex] ?? null;
   const close = ctx.adjBars[lastIndex]?.close ?? null;
   const lastBar = ctx.bars[ctx.bars.length - 1];
+  const prevBar = ctx.bars[ctx.bars.length - 2];
 
   return {
+    lastClose: lastBar?.close ?? null,
+    changePercent:
+      lastBar && prevBar && prevBar.close > 0
+        ? ((lastBar.close - prevBar.close) / prevBar.close) * 100
+        : null,
     ma100,
     ma100Deviation: ma100 !== null && close !== null && ma100 !== 0 ? (close - ma100) / ma100 : null,
     barsSinceMa100Cross: barsSinceMa100Cross(
       ctx.adjBars.map((bar) => bar.close),
       ctx.ma100,
     ),
+    trendR2: trendR2(ctx.bars, 20),
     floatMarketCap: ctx.security.floatMarketCap,
     turnoverAmount: lastBar?.amount ?? null,
   };

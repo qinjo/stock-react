@@ -48,7 +48,9 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "SOURCE_UNAVAILABLE"
   | "INSUFFICIENT_DATA"
-  | "ANALYSIS_FAILED";
+  | "ANALYSIS_FAILED"
+  /** 本地日K库尚未初始化：与 SOURCE_UNAVAILABLE 区分，因为用户要采取的动作不同 */
+  | "DATA_NOT_READY";
 
 export type ApiErrorBody = {
   status: "error";
@@ -239,4 +241,81 @@ export type Fundamentals = {
   valuation: ValuationPercentiles;
   industry: string | null;
   peers?: PeerComparison | null;
+};
+
+/* --------------------------- 短线筛选器 (#16) --------------------------- */
+
+/** 规则来源：书内带行号 / 书内但阈值为推断 / 项目自加的补丁 */
+export type RuleSource = "book" | "inferred" | "offbook";
+
+export type ScreenRuleHit = {
+  id: string;
+  label: string;
+  source: RuleSource;
+  /** 书内定位，如 `L597` */
+  bookRef?: string;
+  /** 阈值与实测值的对照 */
+  detail: string;
+  /** 因缺数据而未判定 */
+  unknown: boolean;
+};
+
+export type ScreenMetrics = {
+  lastClose: number | null;
+  changePercent: number | null;
+  ma100: number | null;
+  /** 后复权收盘相对 MA100 的偏离（比值，非百分比） */
+  ma100Deviation: number | null;
+  /** 最近一次上穿 MA100 距今多少根；从未上穿为 null */
+  barsSinceMa100Cross: number | null;
+  trendR2: number | null;
+  floatMarketCap: number | null;
+  turnoverAmount: number | null;
+};
+
+export type ScreenCandidate = {
+  code: string;
+  /** bootstrap 阶段为空，待行情快照回填 */
+  name: string | null;
+  price: number | null;
+  changePercent: number | null;
+  metrics: ScreenMetrics;
+  ruleHits: ScreenRuleHit[];
+  /** 扣分项 / 未判定项 */
+  deductions: string[];
+};
+
+export type ScreenFunnel = {
+  universe: number;
+  afterExclusions: number;
+  afterHardFilters: number;
+  shortlisted: number;
+};
+
+export type ScreenMode = "trend" | "event";
+export type Strictness = "loose" | "standard" | "strict";
+export type BoardName = "main" | "growth" | "star" | "bj";
+
+export type ScreenParams = {
+  mode: ScreenMode;
+  strictness: Strictness;
+  boards: BoardName[];
+  ignoreMarketGate: boolean;
+  refresh: boolean;
+};
+
+export type ScreenResponse = {
+  status: "ok";
+  /** 库内最新交易日 `YYYY-MM-DD` */
+  dataDate: string;
+  refreshedAt: string;
+  params: ScreenParams;
+  funnel: ScreenFunnel;
+  /** 通过基础池的总数；candidates 是它的前 N 个 */
+  candidateTotal: number;
+  candidates: ScreenCandidate[];
+  /** 当前并未真正生效的规则 */
+  inactiveRules: string[];
+  /** `llmReview: true` 表示本次结果未经大模型复核（降级） */
+  degraded: { llmReview: boolean; reason: string | null };
 };

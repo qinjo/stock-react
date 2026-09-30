@@ -4,6 +4,7 @@ import FundamentalsPanel from "./components/FundamentalsPanel";
 import IndicatorPanel from "./components/IndicatorPanel";
 import KlineChart from "./components/KlineChart";
 import QuoteCard from "./components/QuoteCard";
+import ScreenerPanel from "./components/ScreenerPanel";
 import SearchBox from "./components/SearchBox";
 import { getFundamentals, getIndicators, getKline, getQuote } from "./api";
 import {
@@ -19,12 +20,15 @@ import {
 type Health = { status: string; service: string; time: string; analysisReady?: boolean };
 
 /** 已选股票的取数状态机。 */
+/** 单票分析的目标：搜索补全给完整候选，筛选器只给代码与名称，故用最小形状。 */
+type StockTarget = { code: string; name: string };
+
 type StockState =
   | { kind: "idle" }
-  | { kind: "loading"; candidate: SearchCandidate }
+  | { kind: "loading"; target: StockTarget }
   | {
       kind: "success";
-      candidate: SearchCandidate;
+      target: StockTarget;
       quote: Quote;
       klines: Kline[];
       indicators: Indicators | null;
@@ -32,10 +36,18 @@ type StockState =
     }
   | { kind: "error"; code: ApiErrorCode; message: string };
 
+/** 顶部模式页签：单票分析｜短线筛选器（不引入路由） */
+const MODE_TABS: Array<{ value: "single" | "screener"; label: string }> = [
+  { value: "single", label: "单票分析" },
+  { value: "screener", label: "短线筛选器" },
+];
+
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [stock, setStock] = useState<StockState>({ kind: "idle" });
+  /** 顶部模式：单票分析｜短线筛选器（不引入路由） */
+  const [mode, setMode] = useState<"single" | "screener">("single");
 
   // 后端连通状态（T1）
   useEffect(() => {
@@ -56,18 +68,19 @@ export default function App() {
     };
   }, []);
 
-  async function handleSelect(candidate: SearchCandidate) {
-    setStock({ kind: "loading", candidate });
+  /** 打开一只股票：搜索框与筛选器候选共用这一条取数路径。 */
+  async function openStock(target: StockTarget) {
+    setStock({ kind: "loading", target });
     try {
       // K 线取 250 根：既供图表叠加 MA200，也与指标样本区间一致
       const [quote, klines, indicators, fundamentals] = await Promise.all([
-        getQuote(candidate.code),
-        getKline(candidate.code, 250),
+        getQuote(target.code),
+        getKline(target.code, 250),
         // 指标/基本面失败不该拖垮行情展示（各自降级为不显示对应面板）
-        getIndicators(candidate.code).catch(() => null),
-        getFundamentals(candidate.code).catch(() => null),
+        getIndicators(target.code).catch(() => null),
+        getFundamentals(target.code).catch(() => null),
       ]);
-      setStock({ kind: "success", candidate, quote, klines, indicators, fundamentals });
+      setStock({ kind: "success", target, quote, klines, indicators, fundamentals });
     } catch (err) {
       if (err instanceof ApiError) {
         setStock({ kind: "error", code: err.code, message: err.message });
@@ -81,76 +94,115 @@ export default function App() {
     }
   }
 
+  function handleSelect(candidate: SearchCandidate) {
+    void openStock({ code: candidate.code, name: candidate.name });
+  }
+
+  /** 从筛选器点中候选：切回单票分析并载入该股。 */
+  function handlePickFromScreener(target: StockTarget) {
+    setMode("single");
+    void openStock(target);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white px-6 py-4 lg:px-10">
-        <h1 className="text-xl font-semibold">A股智能分析</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          输入股票代码或名称，获取行情、技术指标与 AI 分析
-        </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">A股智能分析</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {mode === "single"
+                ? "输入股票代码或名称，获取行情、技术指标与 AI 分析"
+                : "按《短线操盘实战技法》的规则筛选全市场，点候选股进入单票分析"}
+            </p>
+          </div>
+          <nav className="flex gap-1" aria-label="模式切换">
+            {MODE_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                aria-pressed={mode === tab.value}
+                onClick={() => setMode(tab.value)}
+                className={`rounded border px-3 py-1 text-sm ${
+                  mode === tab.value
+                    ? "border-slate-800 bg-slate-800 text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
       </header>
 
       <main className="w-full space-y-6 px-6 py-8 lg:px-10">
-        <div className="max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <SearchBox onSelect={handleSelect} disabled={stock.kind === "loading"} />
-        </div>
+        {mode === "screener" ? (
+          <ScreenerPanel onPick={handlePickFromScreener} />
+        ) : (
+          <>
+            <div className="max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <SearchBox onSelect={handleSelect} disabled={stock.kind === "loading"} />
+            </div>
 
-        {stock.kind === "loading" && (
-          <p className="text-sm text-slate-500" role="status">
-            正在获取 {stock.candidate.name} 的行情数据…
-          </p>
-        )}
-
-        {stock.kind === "error" && (
-          <div
-            role="alert"
-            className={`rounded-lg border p-4 text-sm ${
-              stock.code === "SOURCE_UNAVAILABLE"
-                ? "border-amber-200 bg-amber-50 text-amber-800"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
-            <p className="font-medium">
-              {stock.code === "SOURCE_UNAVAILABLE" ? "数据源暂时不可用" : "请求失败"}
-            </p>
-            <p className="mt-1">{stock.message}</p>
-            {stock.code === "SOURCE_UNAVAILABLE" && (
-              <p className="mt-1 text-xs">
-                可能是数据源限流（东财有 IP 级反爬），请稍后重试。
+            {stock.kind === "loading" && (
+              <p className="text-sm text-slate-500" role="status">
+                正在获取 {stock.target.name} 的行情数据…
               </p>
             )}
-          </div>
-        )}
 
-        {/*
-          宽屏两栏：左栏行情常驻（sticky），右栏 AI 分析。
-          —— 读长报告时行情/图表不会滚走，便于随时对照。
-          窄屏（<lg）自动降级为单列堆叠。
-        */}
-        {stock.kind === "success" && (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start">
+            {stock.kind === "error" && (
+              <div
+                role="alert"
+                className={`rounded-lg border p-4 text-sm ${
+                  stock.code === "SOURCE_UNAVAILABLE"
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                <p className="font-medium">
+                  {stock.code === "SOURCE_UNAVAILABLE" ? "数据源暂时不可用" : "请求失败"}
+                </p>
+                <p className="mt-1">{stock.message}</p>
+                {stock.code === "SOURCE_UNAVAILABLE" && (
+                  <p className="mt-1 text-xs">
+                    可能是数据源限流（东财有 IP 级反爬），请稍后重试。
+                  </p>
+                )}
+              </div>
+            )}
+
             {/*
-              左栏在宽屏下高度贴合视口：flex 列 + 固定视口高度，
-              K 线图吃掉剩余空间（fillHeight），从而不出现「左栏内部滚动条」；
-              overflow-y-auto 仅作极矮视口的兜底。
+              宽屏两栏：左栏行情常驻（sticky），右栏 AI 分析。
+              —— 读长报告时行情/图表不会滚走，便于随时对照。
+              窄屏（<lg）自动降级为单列堆叠。
             */}
-            <aside className="space-y-6 lg:sticky lg:top-6 lg:flex lg:h-[calc(100vh-3rem)] lg:flex-col lg:gap-6 lg:space-y-0 lg:self-start lg:overflow-y-auto">
-              <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
-              <KlineChart klines={stock.klines} symbol={stock.candidate.code} fillHeight />
-              {stock.indicators && <IndicatorPanel indicators={stock.indicators} />}
-            </aside>
+            {stock.kind === "success" && (
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start">
+                {/*
+                  左栏在宽屏下高度贴合视口：flex 列 + 固定视口高度，
+                  K 线图吃掉剩余空间（fillHeight），从而不出现「左栏内部滚动条」；
+                  overflow-y-auto 仅作极矮视口的兜底。
+                */}
+                <aside className="space-y-6 lg:sticky lg:top-6 lg:flex lg:h-[calc(100vh-3rem)] lg:flex-col lg:gap-6 lg:space-y-0 lg:self-start lg:overflow-y-auto">
+                  <QuoteCard quote={stock.quote} dataDate={stock.klines.at(-1)?.date} />
+                  <KlineChart klines={stock.klines} symbol={stock.target.code} fillHeight />
+                  {stock.indicators && <IndicatorPanel indicators={stock.indicators} />}
+                </aside>
 
-            <div className="space-y-6">
-              {/* 基本面数据先于 AI 分析呈现：不消耗 LLM，选中即可看 */}
-              {stock.fundamentals && <FundamentalsPanel fundamentals={stock.fundamentals} />}
-              {/* key 确保换股票时分析状态重置 */}
-              <AnalysisPanel
-                key={stock.candidate.code}
-                code={stock.candidate.code}
-                name={stock.candidate.name}
-              />
-            </div>
-          </div>
+                <div className="space-y-6">
+                  {/* 基本面数据先于 AI 分析呈现：不消耗 LLM，选中即可看 */}
+                  {stock.fundamentals && <FundamentalsPanel fundamentals={stock.fundamentals} />}
+                  {/* key 确保换股票时分析状态重置 */}
+                  <AnalysisPanel
+                    key={stock.target.code}
+                    code={stock.target.code}
+                    name={stock.target.name}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 

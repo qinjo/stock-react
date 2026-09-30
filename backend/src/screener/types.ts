@@ -78,12 +78,18 @@ export type FunnelStage = "exclusions" | "hardFilters" | "shortlist";
 
 /** 候选的量化画像：信号层排序与界面展示都用它（不参与淘汰判定）。 */
 export type ScreenMetrics = {
+  /** 最新**不复权**收盘（用户认得的真实成交价） */
+  lastClose: number | null;
+  /** 涨跌幅（%）。库内没有官方字段，由相邻两根不复权收盘算出 */
+  changePercent: number | null;
   /** 后复权 MA100 */
   ma100: number | null;
   /** 后复权收盘相对 MA100 的偏离（比值，非百分比） */
   ma100Deviation: number | null;
   /** 最近一次上穿 MA100 距今多少根；从未上穿为 null */
   barsSinceMa100Cross: number | null;
+  /** 20 日对数价格回归 R²（走势流畅度） */
+  trendR2: number | null;
   /** 流通市值（元），缺数据为 null */
   floatMarketCap: number | null;
   /** 最新交易日成交额（元） */

@@ -3,6 +3,7 @@ import { ApiError } from "./errors.js";
 import { dataRoutes } from "./routes/data.js";
 import { analyzeRoutes } from "./routes/analyze.js";
 import { fundamentalsRoutes } from "./routes/fundamentals.js";
+import { screenerRoutes, type ScreenerRouteDeps } from "./routes/screener.js";
 import { DEFAULT_MODEL, createDeepSeekChat, type ChatFn } from "./analysis/llm.js";
 import type { CachedAnalysis } from "./analysis/index.js";
 import { PromptCache } from "./cache.js";
@@ -18,6 +19,8 @@ export type BuildAppOptions = {
   cacheTtlMs?: number;
   /** 限流配置；默认读环境变量（默认关闭） */
   rateLimit?: RateLimitOptions;
+  /** 筛选路由依赖：测试注入临时日K库与固定时钟 */
+  screener?: ScreenerRouteDeps;
 };
 
 /**
@@ -53,6 +56,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(dataRoutes);
   app.register(fundamentalsRoutes);
   app.register(async (instance) => analyzeRoutes(instance, { chat, model, cache }));
+  app.register(async (instance) => screenerRoutes(instance, options.screener ?? {}));
 
   // 统一错误形状：{ status, code, message }
   app.setErrorHandler((err: FastifyError, _req, reply) => {
