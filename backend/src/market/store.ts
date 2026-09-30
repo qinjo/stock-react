@@ -196,8 +196,20 @@ export class MarketStore {
     }
   }
 
-  readInstrument(code: string): InstrumentRow | null {
-    const row = this.prepare(
+  /**
+   * 列出全部标的的基础信息（约六千行，可整批载入）。
+   * 筛选器据此逐只读日线，而不是一次性把所有日线都读进内存。
+   */
+  listInstruments(): InstrumentRow[] {
+    const rows = this.prepare(
+      `SELECT code, market, board, name,
+              listed_start AS listedStart, listed_end AS listedEnd, is_live AS isLive
+       FROM instruments ORDER BY code`,
+    ).all() as unknown as Array<Omit<InstrumentRow, "isLive"> & { isLive: number }>;
+    return rows.map((row) => ({ ...row, isLive: row.isLive === 1 }));
+  }
+
+  readInstrument(code: string): InstrumentRow | null {    const row = this.prepare(
       `SELECT code, market, board, name,
               listed_start AS listedStart, listed_end AS listedEnd, is_live AS isLive
        FROM instruments WHERE code = ?`,
