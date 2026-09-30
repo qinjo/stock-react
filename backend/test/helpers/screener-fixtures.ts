@@ -73,7 +73,15 @@ export function sideways(n: number, base = 10, amplitude = 0.05): number[] {
  */
 export function goodSecurity(over: Partial<SecurityInput> = {}): SecurityInput {
   const closes = rising(300);
-  closes[closes.length - 1] = (closes[closes.length - 2] as number) * 1.03;
+  // 末三根先挖一个小坑，再放量突破：这样它同时给出
+  // S1（MA20 上穿，档 4）与 S13（阻力突破，档 5），最强档为 4。
+  // 只给 S13 的话，标准档（排除最弱档）会把这个夹具整个挡掉——
+  // 夹具必须带一个"本档愿意做"的信号，否则测的就不是引擎而是参数表。
+  const n = closes.length;
+  closes[n - 3] = (closes[n - 4] as number) * 0.985;
+  closes[n - 2] = (closes[n - 4] as number) * 0.975;
+  // 末根既要上穿 MA20（S1，档 4），也要越过坑前的高点（S13，档 5）
+  closes[n - 1] = (closes[n - 4] as number) * 1.04;
   return {
     code: "600519",
     name: "测试股",

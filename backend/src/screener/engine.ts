@@ -104,6 +104,8 @@ export function screenUniverse(
     // 信号层：基础池回答"能不能买"，这里回答"现在是不是买点"
     const signalSet = evaluateSignals(criteria.mode, ctx);
     if (signalSet.signals.bestTier === null) continue;
+    // P17：本档是否愿意做这个档位的信号（宽松不限 / 标准排除最弱档 / 严格仅最强档）
+    if (params.signalTierMax !== null && signalSet.signals.bestTier > params.signalTierMax) continue;
     // 止损空间过大的不入市（书 L1767）：买点再好，错了要走太远也不值得做
     if (signalSet.exit.stopSpace > params.stopSpaceMax) continue;
     funnel.signalEligible++;

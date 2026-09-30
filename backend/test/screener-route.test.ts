@@ -74,8 +74,13 @@ beforeAll(() => {
   seed(store, goodSecurity({ code: "920002" }), "bj", "万达轴承");
   // 只有 200 根日线：标准档下限 150 放行、严格档下限 250 拦下。
   // 末根同样要放量突破，否则它没有信号、本来就不进候选，三档差异也就观察不到。
+  // 与 goodSecurity 同款收尾：末三根挖坑后越过前高，同时给出 S1（档 4）与 S13（档 5）。
+  // 只给 S13 的话，标准档（排除最弱档）就不要它了——夹具得带一个本档愿意做的信号。
   const short = rising(200);
-  short[short.length - 1] = (short[short.length - 2] as number) * 1.03;
+  const sn = short.length;
+  short[sn - 3] = (short[sn - 4] as number) * 0.985;
+  short[sn - 2] = (short[sn - 4] as number) * 0.975;
+  short[sn - 1] = (short[sn - 4] as number) * 1.04;
   const last200Dates = dateTemplate.slice(-200);
   const shortBars = bars(short).map((b, i) => ({ ...b, date: last200Dates[i] as number }));
   seed(store, goodSecurity({ code: "600001", bars: shortBars }), "main", "两百根股");
@@ -220,9 +225,11 @@ describe("GET /api/screen 参数与板块", () => {
     }
     expect(counts["loose"]).toBe(3);
     expect(counts["standard"]).toBe(3);
-    expect(counts["strict"]).toBe(2); // 600001 被 minListedBars=250 拦下
+    // 严格档同时收紧两道：minListedBars 250（拦下 200 根那只）与
+    // P17「只做最强档 1」（夹具最强档是 4）→ 一只都不做
+    expect(counts["strict"]).toBe(0);
 
-    // 严格档确实少了一只，而不是"参数收了但没用"
+    // 三档确实给出不同结果，而不是"参数收了但没用"
     expect(counts["strict"]).toBeLessThan(counts["standard"] as number);
   });
 });

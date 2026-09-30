@@ -60,6 +60,13 @@ export type ScreenerParams = {
   pullbackMinDrawdown: number;
   /** 「前期大幅回调」的观察窗口（交易日） */
   pullbackWindow: number;
+  /**
+   * 允许的信号档上限（数字越小越强）；null 表示不限制。
+   *
+   * 三档对"只做最确定的形态"的要求不同：宽松不限制、标准排除最弱档（书 L627 的
+   * "最泛化"那一类）、严格只做最强档（书 L1545 的涨停+低位123 或 L958 的底背离）。
+   */
+  signalTierMax: number | null;
 };
 
 const ALL_TIERS: Record<Strictness, ScreenerParams> = {
@@ -77,6 +84,7 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
     rangeProgressMax: 0.5,
     pullbackMinDrawdown: 0.15,
     pullbackWindow: 30,
+    signalTierMax: null,
     limitUpStreakMax: 5,
     limitUpStreakWindow: 20,
     low123Lookback: 120,
@@ -99,6 +107,7 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
     rangeProgressMax: 0.5,
     pullbackMinDrawdown: 0.15,
     pullbackWindow: 30,
+    signalTierMax: 4,
     limitUpStreakMax: 3,
     limitUpStreakWindow: 20,
     low123Lookback: 60,
@@ -121,6 +130,7 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
     rangeProgressMax: 0.5,
     pullbackMinDrawdown: 0.15,
     pullbackWindow: 30,
+    signalTierMax: 1,
     limitUpStreakMax: 2,
     limitUpStreakWindow: 20,
     low123Lookback: 30,
@@ -228,6 +238,11 @@ export const PARAM_PROVENANCE: Record<keyof ScreenerParams, ParamProvenance> = {
     source: "inferred",
     ref: "L1767",
     note: "书说止损空间过大不宜入市，比例上限由我们定",
+  },
+  signalTierMax: {
+    source: "inferred",
+    ref: "L627",
+    note: "书强调只做最确定的形态；三档据此收窄可接受的信号档（设计决定）",
   },
   pullbackMinDrawdown: {
     source: "inferred",

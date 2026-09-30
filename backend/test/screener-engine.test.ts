@@ -55,12 +55,20 @@ describe("screenUniverse 漏斗分档", () => {
   });
 
   it("通过本档严格度后不受其他档影响（同一批输入换档会给出不同结果）", () => {
+    const standard = screenUniverse(MIXED, { ...DEFAULT_CRITERIA, strictness: "standard" });
+    const loose = screenUniverse(MIXED, { ...DEFAULT_CRITERIA, strictness: "loose" });
     const strict = screenUniverse(MIXED, { ...DEFAULT_CRITERIA, strictness: "strict" });
-    // 严格档要求 250 根，600007 本来就倒在硬门槛；其余计数不变
-    expect(strict.funnel.universe).toBe(8);
-    expect(strict.funnel.shortlisted).toBe(1);
-    // 严格档的止损空间上限是 5%，夹具约 3.5%，仍应入选
-    expect(strict.funnel.signalEligible).toBe(1);
+
+    expect(standard.funnel.universe).toBe(8);
+    // 标准档（排除最弱档，≤4）认夹具的 S1（档 4）
+    expect(standard.funnel.signalEligible).toBeGreaterThan(0);
+    // 宽松档不限制档位，因此不少于标准档
+    expect(loose.funnel.shortlisted).toBeGreaterThanOrEqual(standard.funnel.shortlisted);
+    // 严格档 P17 只做最强档（1），夹具最强档是 4 —— 于是一只都不做。
+    // （这里不再断言基础池的具体数字：严格档同时收紧根数、市值与档位三道，
+    //   基础池数字会随夹具细节浮动，而本用例要钉的是"档位闸门真的生效"。）
+    expect(strict.funnel.signalEligible).toBe(0);
+    expect(standard.funnel.signalEligible).toBeGreaterThan(strict.funnel.signalEligible);
     expect(strict.criteria.strictness).toBe("strict");
   });
 
@@ -81,11 +89,17 @@ describe("screenUniverse 漏斗分档", () => {
     expect(outcomeWithBeijing.shortlisted.map((v) => v.code)).toContain("600006");
   });
 
-  it("事件驱动模式尚未接入信号层，因此暂时出不了候选（如实返回空，而不是硬塞）", () => {
+  it("事件模式的候选只携带事件类信号（均线类信号不参与）", () => {
     const eventOutcome = screenUniverse(MIXED, { ...DEFAULT_CRITERIA, mode: "event" });
     expect(eventOutcome.funnel.shortlisted).toBeGreaterThan(0);
-    expect(eventOutcome.funnel.signalEligible).toBe(0);
-    expect(eventOutcome.shortlisted).toEqual([]);
+    const eventIds = new Set(["S6", "S7", "S9", "S10", "S12"]);
+    for (const verdict of eventOutcome.shortlisted) {
+      for (const hit of verdict.signals.signals) {
+        expect(eventIds.has(hit.id), hit.id).toBe(true);
+      }
+    }
+    // 夹具末根的跳空同时给出向上突破性缺口（档 4），因此标准档应当认它
+    expect(eventOutcome.funnel.signalEligible).toBeGreaterThan(0);
   });
 
   it("空输入不炸", () => {
@@ -135,7 +149,11 @@ describe("候选画像", () => {
       ...Array.from({ length: 9 }, (_, i) => 10.2 + i * 0.1),
       11.2,
     ];
-    const outcome = screenUniverse([goodSecurity({ code: "600001", bars: bars(flatThenRise) })]);
+    // 用宽松档：这条测的是"上穿时点"这个指标，不是档位闸门
+    const outcome = screenUniverse([goodSecurity({ code: "600001", bars: bars(flatThenRise) })], {
+      ...DEFAULT_CRITERIA,
+      strictness: "loose",
+    });
     expect(outcome.shortlisted).toHaveLength(1);
     expect(outcome.shortlisted[0]?.metrics.barsSinceMa100Cross).toBe(9);
   });

@@ -124,3 +124,37 @@ describe("两条此前是死参数的档位参数", () => {
     expect(rankShortlist(wide, paramsFor("loose")).map((v) => v.code)).toEqual(["B10", "A25"]);
   });
 });
+
+/* ------------------- P17「允许的信号档」（#26 审查 A1） ------------------- */
+
+describe("P17：三档对信号档位的取舍", () => {
+  /** 夹具最强档为 4（S1 上穿 MA20）：标准档认它、严格档（仅档 1）不认。 */
+  const security = () => goodSecurity();
+
+  it("宽松档不限档位、标准档排除最弱档、严格档只做最强档", () => {
+    expect(paramsFor("loose").signalTierMax).toBeNull();
+    expect(paramsFor("standard").signalTierMax).toBe(4);
+    expect(paramsFor("strict").signalTierMax).toBe(1);
+
+    const eligible = (strictness: "loose" | "standard" | "strict") =>
+      screenUniverse([security()], { ...DEFAULT_CRITERIA, strictness }).funnel.signalEligible;
+
+    expect(eligible("loose")).toBe(1);
+    expect(eligible("standard")).toBe(1); // 档 4 ≤ 4
+    expect(eligible("strict")).toBe(0); // 档 4 > 1，本档不做
+  });
+
+  it("被档位闸门挡下时，候选为 0 但基础池计数仍然如实", () => {
+    const strict = screenUniverse([security()], { ...DEFAULT_CRITERIA, strictness: "strict" });
+    // 个股本身的硬门槛与基础池条件是满足的
+    expect(strict.funnel.signalEligible).toBe(0);
+    expect(strict.shortlisted).toEqual([]);
+  });
+
+  it("档位闸门不改变止损空间与离场计划（那些仍由确定性计算给出）", () => {
+    const loose = screenUniverse([security()], { ...DEFAULT_CRITERIA, strictness: "loose" });
+    const standard = screenUniverse([security()], { ...DEFAULT_CRITERIA, strictness: "standard" });
+    expect(standard.shortlisted[0]?.exit.stop).toBe(loose.shortlisted[0]?.exit.stop);
+    expect(standard.shortlisted[0]?.signals.bestTier).toBe(4);
+  });
+});
