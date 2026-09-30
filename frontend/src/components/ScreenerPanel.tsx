@@ -89,18 +89,21 @@ export default function ScreenerPanel({ onPick }: Props) {
     );
   }
 
-  async function run(override?: { ignoreMarketGate?: boolean }) {
+  async function run(override?: { ignoreMarketGate?: boolean; strictness?: Strictness }) {
     if (boards.length === 0) {
       setState({ kind: "error", code: "INVALID_INPUT", message: "至少要选择一个板块" });
       return;
     }
     const gateOverride = override?.ignoreMarketGate ?? ignoreMarketGate;
+    // 放宽严格度时要用**新的档位**立刻重跑：setState 是异步的，这里不能读 state
+    const tierOverride = override?.strictness ?? strictness;
     setIgnoreMarketGate(gateOverride);
+    setStrictness(tierOverride);
     setState({ kind: "loading" });
     try {
       const data = await getScreen({
         mode,
-        strictness,
+        strictness: tierOverride,
         boards,
         ...(gateOverride ? { ignoreMarketGate: true } : {}),
       });
@@ -211,6 +214,10 @@ export default function ScreenerPanel({ onPick }: Props) {
           data={state.data}
           onPick={onPick}
           onIgnoreMarketGate={() => void run({ ignoreMarketGate: true })}
+          onRelax={() => {
+            const next = NEXT_LOOSER[state.data.params.strictness];
+            if (next) void run({ strictness: next });
+          }}
         />
       )}
     </section>
@@ -249,16 +256,26 @@ function ErrorBox({ code, message }: { code: ApiErrorCode; message: string }) {
   );
 }
 
+/** 放宽的下一档；已是最宽档则为 null（不能再放宽）。 */
+const NEXT_LOOSER: Record<Strictness, Strictness | null> = {
+  strict: "standard",
+  standard: "loose",
+  loose: null,
+};
+
 function ResultView({
   data,
   onPick,
   onIgnoreMarketGate,
+  onRelax,
 }: {
   data: ScreenResponse;
   onPick: (target: { code: string; name: string }) => void;
   onIgnoreMarketGate: () => void;
+  onRelax: () => void;
 }) {
   const { funnel } = data;
+  const nextTier = NEXT_LOOSER[data.params.strictness];
 
   return (
     <div className="space-y-4">
@@ -331,12 +348,29 @@ function ResultView({
         )}
       </div>
 
-      {data.candidates.length === 0 ? (
+      {/* 空仓抑制已经单独解释过了，这里不要再叠一句"今日无符合条件" */}
+      {data.candidates.length === 0 && !data.suppressed ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
           <p className="text-sm font-medium text-slate-700">今日无符合条件的个股</p>
           <p className="mt-1 text-xs text-slate-500">
             这不是故障：源书主张「空仓时间应长于持仓时间」，筛不出票本身就是这套方法的正常输出。
           </p>
+          {/*
+            但"筛不出来"与"门槛卡太死"要能区分。给一条自助的出口，
+            而不是让用户回去手动逐个改参数。
+          */}
+          {nextTier && (
+            <button
+              type="button"
+              onClick={onRelax}
+              className="mt-3 rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            >
+              放宽到「{STRICTNESS_LABELS.find((item) => item.value === nextTier)?.label}」档重跑
+            </button>
+          )}
+          {!nextTier && (
+            <p className="mt-2 text-xs text-slate-400">已是最宽档；再往下就需要调整股票池了。</p>
+          )}
         </div>
       ) : (
         <ul className="space-y-2">

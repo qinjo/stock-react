@@ -7,7 +7,7 @@ import { openMarketStore } from "../src/market/open.js";
 import { MarketStore, type BarRow } from "../src/market/store.js";
 import type { Board } from "../src/market/qlib.js";
 import type { SecurityInput } from "../src/screener/types.js";
-import { goodSecurity, resetDates } from "./helpers/screener-fixtures.js";
+import { bars, goodSecurity, resetDates, rising } from "./helpers/screener-fixtures.js";
 import type { IncrementStats } from "../src/market/increment.js";
 
 /** 假增量：本测试的文件绝不触网；需要断言的用例再包一层 spy。 */
@@ -57,6 +57,11 @@ function seed(store: MarketStore, security: SecurityInput, board: Board, name: s
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "screen-route-"));
   dbPath = join(dir, "kline.sqlite");
+  // 先取一份 300 根的日期序列：只有 200 根的那只必须**与别人同一天结束**，
+  // 否则会被「当日停牌」规则当成停牌股剔除（规则没错，是夹具的时间轴没对齐）
+  resetDates();
+  const dateTemplate = goodSecurity().bars.map((b) => b.date);
+
   const store = new MarketStore(dbPath);
   store.migrate();
   // 三只标的必须共用同一条时间轴：否则"全市场最新交易日"只对得上其中一只，
@@ -67,6 +72,13 @@ beforeAll(() => {
   seed(store, goodSecurity({ code: "300750" }), "growth", "宁德时代");
   resetDates();
   seed(store, goodSecurity({ code: "920002" }), "bj", "万达轴承");
+  // 只有 200 根日线：标准档下限 150 放行、严格档下限 250 拦下。
+  // 末根同样要放量突破，否则它没有信号、本来就不进候选，三档差异也就观察不到。
+  const short = rising(200);
+  short[short.length - 1] = (short[short.length - 2] as number) * 1.03;
+  const last200Dates = dateTemplate.slice(-200);
+  const shortBars = bars(short).map((b, i) => ({ ...b, date: last200Dates[i] as number }));
+  seed(store, goodSecurity({ code: "600001", bars: shortBars }), "main", "两百根股");
   latestDateKey = store.latestTradeDate() as number;
 
   // 指数日线：大盘门要据此判定，因此必须真的种进去（否则只会走"缺数据"的兜底）
@@ -117,9 +129,9 @@ describe("GET /api/screen 成功路径", () => {
       ignoreMarketGate: false,
       refresh: false,
     });
-    expect(body.funnel.universe).toBe(2); // 默认不含北交所
-    expect(body.candidateTotal).toBe(2);
-    expect(body.candidates).toHaveLength(2);
+    expect(body.funnel.universe).toBe(3); // 默认不含北交所
+    expect(body.candidateTotal).toBe(3);
+    expect(body.candidates).toHaveLength(3);
   });
 
   it("候选携带真实成交价、涨跌幅与量化画像", async () => {
@@ -164,20 +176,23 @@ describe("GET /api/screen 参数与板块", () => {
     const body = (
       await app().inject({ method: "GET", url: "/api/screen?boards=main,growth,star,bj" })
     ).json();
-    expect(body.funnel.universe).toBe(3);
+    expect(body.funnel.universe).toBe(4);
     expect(body.candidates.map((c: { code: string }) => c.code)).toContain("920002");
   });
 
   it("只选主板时北交所与创业板都不在池内", async () => {
     const body = (await app().inject({ method: "GET", url: "/api/screen?boards=main" })).json();
-    expect(body.funnel.universe).toBe(1);
-    expect(body.candidates.map((c: { code: string }) => c.code)).toEqual(["000001"]);
+    expect(body.funnel.universe).toBe(2);
+    expect(body.candidates.map((c: { code: string }) => c.code).sort()).toEqual([
+      "000001",
+      "600001",
+    ]);
   });
 
   it("limit 截断候选但候选总数仍如实反映", async () => {
     const body = (await app().inject({ method: "GET", url: "/api/screen?limit=1" })).json();
     expect(body.candidates).toHaveLength(1);
-    expect(body.candidateTotal).toBe(2);
+    expect(body.candidateTotal).toBe(3);
   });
 
   it("严格度与模式被接受并回显", async () => {
@@ -196,12 +211,19 @@ describe("GET /api/screen 参数与板块", () => {
     });
   });
 
-  it("三档严格度都会被执行（严格档要求 250 根，300 根的标的仍通过）", async () => {
+  it("三档严格度真的产生不同结果：严格档的 250 根下限拦下了只有 200 根的那只", async () => {
+    const counts: Record<string, number> = {};
     for (const tier of ["loose", "standard", "strict"]) {
       const res = await app().inject({ method: "GET", url: `/api/screen?strictness=${tier}` });
       expect(res.statusCode, tier).toBe(200);
-      expect(res.json().candidateTotal).toBe(2);
+      counts[tier] = res.json().candidateTotal;
     }
+    expect(counts["loose"]).toBe(3);
+    expect(counts["standard"]).toBe(3);
+    expect(counts["strict"]).toBe(2); // 600001 被 minListedBars=250 拦下
+
+    // 严格档确实少了一只，而不是"参数收了但没用"
+    expect(counts["strict"]).toBeLessThan(counts["standard"] as number);
   });
 });
 

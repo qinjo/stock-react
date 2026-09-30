@@ -615,3 +615,103 @@ describe("候选明细与来源标记（#17）", () => {
     expect(screen.queryByText(/淘汰原因/)).not.toBeInTheDocument();
   });
 });
+
+/* ------------------ 严格度三档与一键放宽（#19） ------------------ */
+
+describe("严格度三档与一键放宽（#19）", () => {
+  const emptyResult: ScreenResponse = {
+    ...success,
+    candidateTotal: 0,
+    candidates: [],
+    funnel: { universe: 6030, afterExclusions: 5006, afterHardFilters: 4855, shortlisted: 3, signalEligible: 0 },
+  };
+
+  it("筛出 0 只且当前是标准档时，提供放宽到宽松档的出口", async () => {
+    stubFetch({ ok: true, body: emptyResult });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    expect(await screen.findByText("今日无符合条件的个股")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "放宽到「宽松」档重跑" })).toBeInTheDocument();
+  });
+
+  it("点放宽后用新的档位重新请求（而不是沿用旧 state）", async () => {
+    const fetchSpy = stubFetch({ ok: true, body: emptyResult });
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+
+    await user.click(await screen.findByRole("button", { name: "放宽到「宽松」档重跑" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("strictness=standard");
+    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("strictness=loose");
+  });
+
+  it("已在最宽档时不再提供放宽（如实说明要动股票池）", async () => {
+    stubFetch({
+      ok: true,
+      body: { ...emptyResult, params: { ...emptyResult.params, strictness: "loose" } },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "宽松" }));
+    await user.click(screen.getByRole("button", { name: "开始筛选" }));
+
+    expect(await screen.findByText(/已是最宽档/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /放宽到/ })).not.toBeInTheDocument();
+  });
+
+  it("切换严格度会重新请求，且不会把两档结果混在一起展示", async () => {
+    const strictResult: ScreenResponse = {
+      ...success,
+      candidateTotal: 5,
+      params: { ...success.params, strictness: "strict" },
+      funnel: { universe: 6030, afterExclusions: 5006, afterHardFilters: 4855, shortlisted: 120, signalEligible: 5 },
+    };
+    let call = 0;
+    const bodies = [success, strictResult];
+    const fetchSpy = vi.fn((_input: RequestInfo | URL) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(bodies[Math.min(call++, bodies.length - 1)]),
+      } as Response),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+    expect(await screen.findByText(/基础池 337/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "严格" }));
+    await user.click(screen.getByRole("button", { name: "开始筛选" }));
+
+    // 旧结果被新结果整体替换，页面上只剩一组参数对应的漏斗
+    await waitFor(() => expect(screen.getByText(/基础池 120/)).toBeInTheDocument());
+    expect(screen.queryByText(/基础池 337/)).not.toBeInTheDocument();
+  });
+
+  it("空仓抑制时不显示「今日无符合条件」，避免与空仓横幅说两件事", async () => {
+    stubFetch({
+      ok: true,
+      body: {
+        ...emptyResult,
+        candidateTotal: 22,
+        suppressed: true,
+        marketGate: {
+          ...success.marketGate!,
+          state: "empty",
+          gatePosition: 0,
+          bookPosition: 0,
+          positionAdvice: 0,
+          reason: "【空仓档】上证指数 3400.00 跌破 MA100 3600.00",
+        },
+      },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    expect(await screen.findByText("空仓信号：今天默认不出票")).toBeInTheDocument();
+    expect(screen.queryByText("今日无符合条件的个股")).not.toBeInTheDocument();
+  });
+});
