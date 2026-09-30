@@ -1,0 +1,430 @@
+{
+ "status": "ok",
+ "dataDate": "2026-09-30",
+ "refreshedAt": "2026-09-30T05:38:26.037Z",
+ "params": {
+  "mode": "event",
+  "strictness": "standard",
+  "boards": [
+   "main",
+   "growth",
+   "star"
+  ],
+  "ignoreMarketGate": true,
+  "refresh": false
+ },
+ "funnel": {
+  "universe": 5555,
+  "afterExclusions": 5006,
+  "afterHardFilters": 4887,
+  "shortlisted": 654,
+  "signalEligible": 2,
+  "reviewed": 2
+ },
+ "candidateTotal": 2,
+ "candidates": [
+  {
+   "code": "603590",
+   "name": "康辰药业",
+   "price": 32.11,
+   "changePercent": 10,
+   "metrics": {
+    "lastClose": 32.11,
+    "changePercent": 10,
+    "ma100": 0.9920802010659128,
+    "ma100Deviation": 0.015491895671401513,
+    "barsSinceMa100Cross": 0,
+    "trendR2": 0.0001628593751380369,
+    "floatMarketCap": 5105000000,
+    "turnoverAmount": 183280000
+   },
+   "ruleHits": [
+    {
+     "id": "E-noBars",
+     "label": "剔除库内无日线的标的",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "260 根日线",
+     "unknown": false
+    },
+    {
+     "id": "E-live",
+     "label": "剔除已退市 / 长期停牌",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "数据截止于最新交易日",
+     "unknown": false
+    },
+    {
+     "id": "E-st",
+     "label": "剔除 ST / 退市整理",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "名称「康辰药业」未命中",
+     "unknown": false
+    },
+    {
+     "id": "E-suspended",
+     "label": "剔除停牌",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "成交量 6万手",
+     "unknown": false
+    },
+    {
+     "id": "E-suspended-today",
+     "label": "剔除当日停牌（最后一根不在最新交易日）",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "最新交易日有成交",
+     "unknown": false
+    },
+    {
+     "id": "E-oneword",
+     "label": "剔除一字板",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "日内振幅 9.53%",
+     "unknown": false
+    },
+    {
+     "id": "E-board",
+     "label": "板块开关（默认剔除北交所）",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "板块 main",
+     "unknown": false
+    },
+    {
+     "id": "H-bars",
+     "label": "日 K 根数下限",
+     "source": "offbook",
+     "stage": "hardFilters",
+     "detail": "260 根 ≥ 150",
+     "unknown": false
+    },
+    {
+     "id": "H-noLimitUpYesterday",
+     "label": "涨停后第 2–3 日不追高",
+     "source": "book",
+     "stage": "hardFilters",
+     "bookRef": "L1499",
+     "detail": "未处于涨停后第 2–3 日",
+     "unknown": false
+    },
+    {
+     "id": "U-marketCap",
+     "label": "流通市值区间",
+     "source": "inferred",
+     "stage": "shortlist",
+     "bookRef": "L1686",
+     "detail": "51.05亿 落在 20.00亿–80.00亿",
+     "unknown": false
+    },
+    {
+     "id": "U-turnover",
+     "label": "成交额下限（可买性）",
+     "source": "offbook",
+     "stage": "shortlist",
+     "detail": "18328万 ≥ 5000万",
+     "unknown": false
+    },
+    {
+     "id": "U-growthIndexGate",
+     "label": "创业板指在 MA100 之上（做创业板股时）",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1033",
+     "detail": "非创业板股票，不受创业板指约束",
+     "unknown": false
+    },
+    {
+     "id": "X-highLimitUp",
+     "label": "剔除高位涨停（MA100 之上）",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1461",
+     "detail": "涨停位于 MA100 之下，或为从下方收复 MA100",
+     "unknown": false
+    },
+    {
+     "id": "X-limitUpBelowTrendline",
+     "label": "剔除下降趋势线之下的涨停 / 旱地拔葱",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1441",
+     "detail": "近期未构成下降趋势线",
+     "unknown": false
+    },
+    {
+     "id": "X-limitUpStreak",
+     "label": "剔除连板后回调再涨停",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1724",
+     "detail": "近 20 日涨停 1 次 < 3",
+     "unknown": false
+    },
+    {
+     "id": "U-trendR2",
+     "label": "走势流畅度（20 日对数价格回归 R²）",
+     "source": "inferred",
+     "stage": "shortlist",
+     "bookRef": "L408",
+     "detail": "本档不要求走势流畅度",
+     "unknown": false
+    }
+   ],
+   "deductions": [],
+   "signals": {
+    "signals": [
+     {
+      "id": "S12",
+      "label": "涨停 B 形态",
+      "tier": 2,
+      "detail": "前期回调 17%，当日涨停收复下跌缺口上沿 0.96 并站上 MA100",
+      "bookRef": "L1477"
+     }
+    ],
+    "bestTier": 2
+   },
+   "signalTier": 2,
+   "exit": {
+    "entry": 32.11,
+    "stop": 29.59,
+    "stopBasis": "low123",
+    "stopBasisLabel": "123 结构低点 3（书 L689）",
+    "stopSpace": 0.0786,
+    "invalidation": "跌破低点 3（29.59）即结构破坏，按书 L707 破 3 减半、破低点 1 清仓；当日收盘于涨停价：不要在封板价买入（书 L1537），等次日开盘或回踩确认",
+    "scaleOut": "冲高分批卖出；涨停后冲高注意减仓（书 L1998 / L1521）",
+    "bookRef": "L689"
+   },
+   "resistance": [
+    {
+     "kind": "prior-high",
+     "price": 37.93,
+     "detail": "前 60 根高点 37.93（可能受阻的位置，不是涨幅预测）"
+    }
+   ],
+   "reasoning": "涨停B形态，16项规则全命中，止损空间7.9%，MA100偏离仅1.5%"
+  },
+  {
+   "code": "605287",
+   "name": "德才股份",
+   "price": 37.39,
+   "changePercent": 10,
+   "metrics": {
+    "lastClose": 37.39,
+    "changePercent": 10,
+    "ma100": 1.2634320056106896,
+    "ma100Deviation": -0.06381676205819176,
+    "barsSinceMa100Cross": null,
+    "trendR2": 0.5299353693970432,
+    "floatMarketCap": 5235000000,
+    "turnoverAmount": 255970000
+   },
+   "ruleHits": [
+    {
+     "id": "E-noBars",
+     "label": "剔除库内无日线的标的",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "260 根日线",
+     "unknown": false
+    },
+    {
+     "id": "E-live",
+     "label": "剔除已退市 / 长期停牌",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "数据截止于最新交易日",
+     "unknown": false
+    },
+    {
+     "id": "E-st",
+     "label": "剔除 ST / 退市整理",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "名称「德才股份」未命中",
+     "unknown": false
+    },
+    {
+     "id": "E-suspended",
+     "label": "剔除停牌",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "成交量 7万手",
+     "unknown": false
+    },
+    {
+     "id": "E-suspended-today",
+     "label": "剔除当日停牌（最后一根不在最新交易日）",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "最新交易日有成交",
+     "unknown": false
+    },
+    {
+     "id": "E-oneword",
+     "label": "剔除一字板",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "日内振幅 9.09%",
+     "unknown": false
+    },
+    {
+     "id": "E-board",
+     "label": "板块开关（默认剔除北交所）",
+     "source": "offbook",
+     "stage": "exclusions",
+     "detail": "板块 main",
+     "unknown": false
+    },
+    {
+     "id": "H-bars",
+     "label": "日 K 根数下限",
+     "source": "offbook",
+     "stage": "hardFilters",
+     "detail": "260 根 ≥ 150",
+     "unknown": false
+    },
+    {
+     "id": "H-noLimitUpYesterday",
+     "label": "涨停后第 2–3 日不追高",
+     "source": "book",
+     "stage": "hardFilters",
+     "bookRef": "L1499",
+     "detail": "未处于涨停后第 2–3 日",
+     "unknown": false
+    },
+    {
+     "id": "U-marketCap",
+     "label": "流通市值区间",
+     "source": "inferred",
+     "stage": "shortlist",
+     "bookRef": "L1686",
+     "detail": "52.35亿 落在 20.00亿–80.00亿",
+     "unknown": false
+    },
+    {
+     "id": "U-turnover",
+     "label": "成交额下限（可买性）",
+     "source": "offbook",
+     "stage": "shortlist",
+     "detail": "25597万 ≥ 5000万",
+     "unknown": false
+    },
+    {
+     "id": "U-growthIndexGate",
+     "label": "创业板指在 MA100 之上（做创业板股时）",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1033",
+     "detail": "非创业板股票，不受创业板指约束",
+     "unknown": false
+    },
+    {
+     "id": "X-highLimitUp",
+     "label": "剔除高位涨停（MA100 之上）",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1461",
+     "detail": "涨停位于 MA100 之下，或为从下方收复 MA100",
+     "unknown": false
+    },
+    {
+     "id": "X-limitUpBelowTrendline",
+     "label": "剔除下降趋势线之下的涨停 / 旱地拔葱",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1441",
+     "detail": "近期未构成下降趋势线",
+     "unknown": false
+    },
+    {
+     "id": "X-limitUpStreak",
+     "label": "剔除连板后回调再涨停",
+     "source": "book",
+     "stage": "shortlist",
+     "bookRef": "L1724",
+     "detail": "近 20 日涨停 1 次 < 3",
+     "unknown": false
+    },
+    {
+     "id": "U-trendR2",
+     "label": "走势流畅度（20 日对数价格回归 R²）",
+     "source": "inferred",
+     "stage": "shortlist",
+     "bookRef": "L408",
+     "detail": "本档不要求走势流畅度",
+     "unknown": false
+    }
+   ],
+   "deductions": [],
+   "signals": {
+    "signals": [
+     {
+      "id": "S9",
+      "label": "突破性涨停",
+      "tier": 3,
+      "detail": "涨停并上穿均线",
+      "bookRef": "L1497"
+     }
+    ],
+    "bestTier": 3
+   },
+   "signalTier": 3,
+   "exit": {
+    "entry": 37.39,
+    "stop": 36.59,
+    "stopBasis": "low123",
+    "stopBasisLabel": "123 结构低点 3（书 L689）",
+    "stopSpace": 0.0213,
+    "invalidation": "跌破低点 3（36.59）即结构破坏，按书 L707 破 3 减半、破低点 1 清仓；当日收盘于涨停价：不要在封板价买入（书 L1537），等次日开盘或回踩确认",
+    "scaleOut": "冲高分批卖出；涨停后冲高注意减仓（书 L1998 / L1521）",
+    "bookRef": "L689"
+   },
+   "resistance": [
+    {
+     "kind": "prior-high",
+     "price": 44.59,
+     "detail": "前 60 根高点 44.59（可能受阻的位置，不是涨幅预测）"
+    }
+   ],
+   "reasoning": "突破性涨停，16项规则全命中，止损空间仅2.1%，MA100偏离-6.4%"
+  }
+ ],
+ "inactiveRules": [],
+ "marketGate": {
+  "state": "empty",
+  "indexCode": "sh000001",
+  "indexClose": 3840.83,
+  "indexMa60": 3904.0194999999994,
+  "indexMa100": 3978.066900000004,
+  "threeMonthReturn": -0.03744386302578284,
+  "bookPosition": 0,
+  "gatePosition": 0,
+  "positionAdvice": 0,
+  "growthIndexAboveMa100": false,
+  "reason": "【空仓档】上证指数 3840.83 跌破 MA100 3978.07；创业板指在 MA100 之下，创业板个股本轮不参与"
+ },
+ "suppressed": false,
+ "degraded": {
+  "llmReview": false,
+  "reason": null
+ },
+ "fromCache": false,
+ "increment": {
+  "ran": false,
+  "failed": false,
+  "error": null,
+  "snapshotDate": null,
+  "barsWritten": 0,
+  "barsRefreshed": 0,
+  "exDividends": 0,
+  "namesUpdated": 0,
+  "marketCapsUpdated": 0,
+  "skippedTotal": 0,
+  "durationMs": 6231
+ }
+}

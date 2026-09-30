@@ -21,6 +21,7 @@
 > | 缓存命中与未命中是否给出同一答案 | 一致 | `backend/test/screener-orchestrator.test.ts` |
 > | 数据不变式（730 万行真实库） | 10 项，查出并修掉 2 处 | `npm run verify:invariants` |
 > | **大模型那条路径（真实模型）** | 两条路径都接得住，且守约束 | `npm run verify:llm` |
+> | **界面渲染真实响应** | 三份真实载荷（趋势/事件/空仓抑制）都正常渲染 | `frontend/src/ScreenerPanel.real.test.tsx` |
 >
 > **因此只剩一层需要你判断：语义翻译。** 也就是下面清单的第 1 与第 5 条——
 > 把书里的定性描述翻成具体数字（"刚刚突破" → 10 个交易日、"大幅快速回调" → 15% / 30 日）

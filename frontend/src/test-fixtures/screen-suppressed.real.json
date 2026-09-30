@@ -1,0 +1,59 @@
+{
+ "status": "ok",
+ "dataDate": "2026-09-30",
+ "refreshedAt": "2026-09-30T05:38:18.788Z",
+ "params": {
+  "mode": "trend",
+  "strictness": "standard",
+  "boards": [
+   "main",
+   "growth",
+   "star"
+  ],
+  "ignoreMarketGate": true,
+  "refresh": false
+ },
+ "funnel": {
+  "universe": 5555,
+  "afterExclusions": 5006,
+  "afterHardFilters": 4855,
+  "shortlisted": 243,
+  "signalEligible": 12,
+  "reviewed": 10
+ },
+ "candidateTotal": 12,
+ "candidates": [],
+ "inactiveRules": [],
+ "marketGate": {
+  "state": "empty",
+  "indexCode": "sh000001",
+  "indexClose": 3840.83,
+  "indexMa60": 3904.0194999999994,
+  "indexMa100": 3978.066900000004,
+  "threeMonthReturn": -0.03744386302578284,
+  "bookPosition": 0,
+  "gatePosition": 0,
+  "positionAdvice": 0,
+  "growthIndexAboveMa100": false,
+  "reason": "【空仓档】上证指数 3840.83 跌破 MA100 3978.07；创业板指在 MA100 之下，创业板个股本轮不参与"
+ },
+ "suppressed": true,
+ "degraded": {
+  "llmReview": false,
+  "reason": null
+ },
+ "fromCache": false,
+ "increment": {
+  "ran": false,
+  "failed": false,
+  "error": null,
+  "snapshotDate": null,
+  "barsWritten": 0,
+  "barsRefreshed": 0,
+  "exDividends": 0,
+  "namesUpdated": 0,
+  "marketCapsUpdated": 0,
+  "skippedTotal": 0,
+  "durationMs": 11933
+ }
+}
