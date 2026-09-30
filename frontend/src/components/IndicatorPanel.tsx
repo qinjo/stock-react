@@ -28,6 +28,16 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
   const macdState =
     ind.macd.hist === null ? "无数据" : ind.macd.hist > 0 ? "多头动能" : "空头动能";
 
+  const maLadder: Array<{ label: string; value: number | null }> = [
+    { label: "MA5", value: ind.ma.ma5 },
+    { label: "MA10", value: ind.ma.ma10 },
+    { label: "MA20", value: ind.ma.ma20 },
+    { label: "MA60", value: ind.ma.ma60 },
+    { label: "MA100", value: ind.ma.ma100 },
+    { label: "MA120", value: ind.ma.ma120 },
+    { label: "MA144", value: ind.ma.ma144 },
+  ];
+
   const cells: Array<{ group: string; items: Array<[string, string, string?]> }> = [
     {
       group: "趋势",
@@ -109,6 +119,46 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
           </dd>
         </div>
       </dl>
+
+      {/*
+        书的均线阶梯单独成块：源书只给均线参数、不研究量价，
+        MA100 是它唯一的选股分界线，所以这里把 MA100 视觉上单独提出来。
+      */}
+      <div className="mt-3 border-t border-slate-100 pt-2">
+        <p className="text-xs text-slate-400">
+          均线阶梯
+          <span className="ml-1 text-slate-300">（书里的选股分界线：收盘价 &gt; MA100）</span>
+        </p>
+        <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {maLadder.map(({ label, value }) => (
+            <div key={label} className="flex gap-1.5">
+              <dt className={label === "MA100" ? "font-medium text-slate-700" : "text-slate-500"}>
+                {label}
+              </dt>
+              <dd
+                className={`font-medium ${
+                  label === "MA100" ? "text-slate-900" : "text-slate-800"
+                }`}
+              >
+                {fmt(value)}
+              </dd>
+            </div>
+          ))}
+          <div className="flex gap-1.5">
+            <dt className="text-slate-500">偏离MA100</dt>
+            <dd className={`font-medium ${signClass(ind.priceVsMa100)}`}>
+              {fmt(ind.priceVsMa100, 2, "%")}
+            </dd>
+          </div>
+          <div className="flex gap-1.5">
+            <dt className="text-slate-500">周线MA20</dt>
+            <dd className="font-medium text-slate-800">
+              {fmt(ind.weeklyMa20)}
+              <span className="ml-1 font-normal text-slate-400">（{ind.weeklySampleSize} 周）</span>
+            </dd>
+          </div>
+        </dl>
+      </div>
     </section>
   );
 }

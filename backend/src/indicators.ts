@@ -36,6 +36,29 @@ export type Macd = {
   hist: number | null;
 };
 
+/** 书里使用的均线阶梯。源书只给均线参数，不给量价阈值（作者明言「根本不研究成交量」）。 */
+export type MaSet = {
+  ma5: number | null;
+  ma10: number | null;
+  ma20: number | null;
+  ma60: number | null;
+  ma100: number | null;
+  ma120: number | null;
+  ma144: number | null;
+};
+
+/** 周线重采样后的 bar。书的「看长做短」依赖周线级别判断。 */
+export type WeeklyBar = {
+  /** ISO 8601 周键，如 `2026-W39` */
+  week: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  /** 成交量（手），本周各日之和 */
+  volume: number;
+};
+
 export type Indicators = {
   /** 参与计算的日 K 根数 */
   sampleSize: number;
@@ -47,6 +70,14 @@ export type Indicators = {
   /** 最新收盘相对均线的偏离（%）：正=在均线上方 */
   priceVsSma50: number | null;
   priceVsSma200: number | null;
+  /** 书的均线阶梯：核心选股判据是「收盘价 > MA100」 */
+  ma: MaSet;
+  /** 最新收盘相对 MA100 的偏离（%）：正=在 MA100 上方 */
+  priceVsMa100: number | null;
+  /** 周线重采样后的 MA20。书 L500：周线 MA20 其实就相当于日线 MA100 */
+  weeklyMa20: number | null;
+  /** 周线样本根数（含当前尚未走完的一周） */
+  weeklySampleSize: number;
   /** RSI(14)，取值 0–100；强趋势中可能长期处于极端区（提示词需注明） */
   rsi14: number | null;
   macd: Macd;
@@ -106,6 +137,55 @@ function annualizedVolatility(closes: number[], n: number): number | null {
 }
 
 /**
+ * ISO 8601 周键（周一为一周之始），如 `2026-W39`。
+ *
+ * 用 UTC 计算：本地时区会把 `2026-01-01`（周四）这类跨年日期挪到相邻周，
+ * 从而把周线切错——这类错误在年度边界上只影响一周，但会让 MA20 悄悄偏一点。
+ */
+export function isoWeekKey(date: string): string {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  const weekday = dt.getUTCDay() || 7; // 周日算第 7 天
+  dt.setUTCDate(dt.getUTCDate() + 4 - weekday); // 移到本周的周四
+  const isoYear = dt.getUTCFullYear();
+  const yearStart = Date.UTC(isoYear, 0, 1);
+  const week = Math.ceil(((dt.getTime() - yearStart) / 86_400_000 + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * 把日 K 重采样为周线。
+ *
+ * 输入必须按日期升序。**当前尚未走完的一周也会出现**——这是有意的：
+ * 实时看盘时「本周到目前为止」就是该周的现状，剔除它会让周线滞后一周。
+ */
+export function resampleWeekly(klines: Kline[]): WeeklyBar[] {
+  const out: WeeklyBar[] = [];
+  let current: WeeklyBar | null = null;
+
+  for (const k of klines) {
+    const week = isoWeekKey(k.date);
+    if (!current || current.week !== week) {
+      current = {
+        week,
+        open: k.open,
+        high: k.high,
+        low: k.low,
+        close: k.close,
+        volume: k.volume,
+      };
+      out.push(current);
+      continue;
+    }
+    current.high = Math.max(current.high, k.high);
+    current.low = Math.min(current.low, k.low);
+    current.close = k.close; // 最近一根的收盘即本周收盘
+    current.volume += k.volume;
+  }
+  return out;
+}
+
+/**
  * 计算派生技术指标。输入应尽量长（≥200 根日 K 才能给出 SMA200）。
  * @throws InsufficientDataError 当样本少于 MIN_SAMPLES
  */
@@ -119,6 +199,27 @@ export function computeIndicators(klines: Kline[]): Indicators {
 
   const sma50 = round(last(SMA.calculate({ period: 50, values: closes })));
   const sma200 = round(last(SMA.calculate({ period: 200, values: closes })));
+
+  // 书的均线阶梯。样本不足的那几条各自为 null，不影响其余字段。
+  const maSet: MaSet = {
+    ma5: round(last(SMA.calculate({ period: 5, values: closes }))),
+    ma10: round(last(SMA.calculate({ period: 10, values: closes }))),
+    ma20: round(last(SMA.calculate({ period: 20, values: closes }))),
+    ma60: round(last(SMA.calculate({ period: 60, values: closes }))),
+    ma100: round(last(SMA.calculate({ period: 100, values: closes }))),
+    ma120: round(last(SMA.calculate({ period: 120, values: closes }))),
+    ma144: round(last(SMA.calculate({ period: 144, values: closes }))),
+  };
+
+  const weekly = resampleWeekly(klines);
+  const weeklyMa20 = round(
+    last(
+      SMA.calculate({
+        period: 20,
+        values: weekly.map((w) => w.close),
+      }),
+    ),
+  );
 
   const rsiRaw = last(RSI.calculate({ period: 14, values: closes }));
   // 边界校验：RSI 必须落在 0–100，越界说明数据或库行为异常
@@ -148,6 +249,10 @@ export function computeIndicators(klines: Kline[]): Indicators {
     sma200,
     priceVsSma50: sma50 ? round(((latestClose - sma50) / sma50) * 100) : null,
     priceVsSma200: sma200 ? round(((latestClose - sma200) / sma200) * 100) : null,
+    ma: maSet,
+    priceVsMa100: maSet.ma100 ? round(((latestClose - maSet.ma100) / maSet.ma100) * 100) : null,
+    weeklyMa20,
+    weeklySampleSize: weekly.length,
     rsi14,
     macd: {
       dif: round(macdRaw?.MACD),

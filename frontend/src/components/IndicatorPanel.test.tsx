@@ -11,6 +11,18 @@ const indicators: Indicators = {
   sma200: 1335.94,
   priceVsSma50: -3.8,
   priceVsSma200: -6.32,
+  ma: {
+    ma5: 1268.4,
+    ma10: 1275.2,
+    ma20: 1282.61,
+    ma60: 1310.5,
+    ma100: 1327.42,
+    ma120: 1330.1,
+    ma144: 1333.2,
+  },
+  priceVsMa100: -5.21,
+  weeklyMa20: 1298.76,
+  weeklySampleSize: 52,
   rsi14: 37.02,
   macd: { dif: -11.45, dea: -6.12, hist: -5.33 },
   atr14: 19.27,
@@ -85,5 +97,26 @@ describe("IndicatorPanel", () => {
     render(<IndicatorPanel indicators={indicators} />);
     expect(screen.getByText(/25.9%/)).toBeInTheDocument();
     expect(screen.getByText(/1151.01–1539.98/)).toBeInTheDocument();
+  });
+
+  it("展示书的均线阶梯 MA5–MA144，以及 MA100 偏离与周线 MA20", () => {
+    render(<IndicatorPanel indicators={indicators} />);
+    for (const label of ["MA5", "MA10", "MA20", "MA60", "MA100", "MA120", "MA144"]) {
+      expect(screen.getByText(label), label).toBeInTheDocument();
+    }
+    expect(screen.getByText("1327.42")).toBeInTheDocument(); // MA100
+    expect(screen.getByText("-5.21%")).toBeInTheDocument(); // 偏离 MA100
+    expect(screen.getByText("1298.76")).toBeInTheDocument(); // 周线 MA20
+    expect(screen.getByText(/52 周/)).toBeInTheDocument();
+  });
+
+  it("均线缺失时逐条显示占位符，不出现 NaN", () => {
+    const empty = { ma5: null, ma10: null, ma20: null, ma60: null, ma100: null, ma120: null, ma144: null };
+    render(
+      <IndicatorPanel
+        indicators={{ ...indicators, ma: empty, priceVsMa100: null, weeklyMa20: null, weeklySampleSize: 3 }}
+      />,
+    );
+    expect(screen.queryByText(/NaN|null|undefined/)).not.toBeInTheDocument();
   });
 });

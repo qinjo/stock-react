@@ -144,6 +144,22 @@ export type Indicators = {
   sma200: number | null;
   priceVsSma50: number | null;
   priceVsSma200: number | null;
+  /** 书的均线阶梯：核心选股判据是「收盘价 > MA100」 */
+  ma: {
+    ma5: number | null;
+    ma10: number | null;
+    ma20: number | null;
+    ma60: number | null;
+    ma100: number | null;
+    ma120: number | null;
+    ma144: number | null;
+  };
+  /** 最新收盘相对 MA100 的偏离（%）：正=在 MA100 上方 */
+  priceVsMa100: number | null;
+  /** 周线重采样后的 MA20（书 L500：周线 MA20 ≡ 日线 MA100） */
+  weeklyMa20: number | null;
+  /** 周线样本根数（含当前尚未走完的一周） */
+  weeklySampleSize: number;
   rsi14: number | null;
   macd: { dif: number | null; dea: number | null; hist: number | null };
   atr14: number | null;
