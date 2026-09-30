@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adjustedCloses,
+  detectLow123,
   adjustedPrice,
   countCrossings,
   fallingTrendlineAt,
@@ -14,6 +15,7 @@ import {
   smaSeries,
   trendR2,
 } from "../src/screener/structure.js";
+import { paramsFor } from "../src/screener/params.js";
 import { bar, bars } from "./helpers/screener-fixtures.js";
 
 describe("复权换算", () => {
@@ -179,5 +181,113 @@ describe("走势流畅度 R²", () => {
 
   it("样本不足返回 null", () => {
     expect(trendR2(bars([10, 11]), 20)).toBeNull();
+  });
+});
+
+/* ------------------------------- 低位 123 结构 ------------------------------- */
+
+/** 把若干段线性价格拼成一条走势：`[根数, 起点, 终点]`。 */
+function path(segments: Array<[number, number, number]>): number[] {
+  const out: number[] = [];
+  for (const [count, from, to] of segments) {
+    for (let i = 1; i <= count; i++) out.push(from + (to - from) * (i / count));
+  }
+  return out;
+}
+
+describe("detectLow123", () => {
+  const swingWindow = 3;
+  /** 低点1(8) → 高点2(12) → 低点3(9.5，高于低点1) → 向上突破 */
+  const base = path([
+    [15, 12, 8],
+    [10, 8, 12],
+    [8, 12, 9.5],
+    [10, 9.5, 13],
+  ]);
+
+  it("识别低点1 → 高点2 → 低点3，并以低点3为止损", () => {
+    const structure = detectLow123(bars(base), { swingWindow, lookback: 60 });
+    expect(structure).not.toBeNull();
+    // 夹具的显著点取的是 bar 的最高/最低（close 的 ±1%），所以这里断言关系而非收盘价
+    expect(structure!.l1.price).toBeCloseTo(8 * 0.99, 1);
+    expect(structure!.h2.price).toBeCloseTo(12 * 1.01, 1);
+    expect(structure!.l3.price).toBeCloseTo(9.5 * 0.99, 1);
+    // 书 L689 的核心：低点 3 高于低点 1
+    expect(structure!.l3.price).toBeGreaterThan(structure!.l1.price);
+    expect(structure!.stop).toBeCloseTo(structure!.l3.price, 6);
+    expect(structure!.l3.index).toBeGreaterThan(structure!.h2.index);
+    expect(structure!.h2.index).toBeGreaterThan(structure!.l1.index);
+    expect(structure!.span).toBeGreaterThan(0);
+  });
+
+  it("突破高点2 时标为已突破，并给出突破幅度", () => {
+    const structure = detectLow123(bars(base), { swingWindow, lookback: 60 })!;
+    expect(structure.brokenOut).toBe(true);
+    expect(structure.breakoutRatio).toBeGreaterThan(0);
+  });
+
+  it("尚未突破高点2 时不算入场（书以突破位置2为入场点）", () => {
+    // 回落到低点3 后小幅反弹，但收在高点2 之下
+    // （低点3 之后必须还有几根 K 线，否则它还没被确认为显著低点）
+    const notBroken = path([
+      [15, 12, 8],
+      [10, 8, 12],
+      [12, 12, 9.5],
+      [6, 9.5, 10.5],
+    ]);
+    const structure = detectLow123(bars(notBroken), { swingWindow, lookback: 60 });
+    expect(structure).not.toBeNull();
+    expect(structure!.brokenOut).toBe(false);
+    expect(structure!.breakoutRatio).toBeLessThan(0);
+  });
+
+  it("低点3 不高于低点1 时不算结构（那是继续下行，不是底部抬高）", () => {
+    const lowerLow = path([
+      [15, 12, 9],
+      [10, 9, 12],
+      [12, 12, 6], // 低点3 低于低点1
+      [10, 6, 13],
+    ]);
+    expect(detectLow123(bars(lowerLow), { swingWindow, lookback: 60 })).toBeNull();
+  });
+
+  it("缺少高点2 或低点3 时返回 null", () => {
+    // 一路下跌：没有可用的高点
+    expect(detectLow123(bars(path([[30, 20, 10]])), { swingWindow, lookback: 60 })).toBeNull();
+    // 一段上涨后横盘：只有低点没有第二个低点
+    expect(detectLow123(bars(path([[15, 10, 14], [15, 14, 13.5]])), { swingWindow, lookback: 60 })).toBeNull();
+  });
+
+  it("回溯窗口按严格度三档取值：窗口太短就认不到更早形成的结构", () => {
+    const structure = detectLow123(bars(base), { swingWindow, lookback: 60 });
+    expect(structure).not.toBeNull();
+    // 低点1 距最后一根约 28 根：30 根窗口仍能看到，20 根就看不到了
+    expect(detectLow123(bars(base), { swingWindow, lookback: 30 })).not.toBeNull();
+    expect(detectLow123(bars(base), { swingWindow, lookback: 20 })).toBeNull();
+
+    // 参数表里的三档取值
+    expect(paramsFor("loose").low123Lookback).toBeGreaterThan(paramsFor("standard").low123Lookback);
+    expect(paramsFor("standard").low123Lookback).toBeGreaterThan(paramsFor("strict").low123Lookback);
+  });
+
+  it("有多个结构时取最新的那个（老结构早已失效，拿它当入场依据会错过当下）", () => {
+    const twoBases = path([
+      [15, 12, 8], // 低点1 = 8
+      [10, 8, 12], // 高点2 = 12
+      [8, 12, 9.5], // 低点3 = 9.5（底部抬高）
+      [10, 9.5, 14], // 更高的高点
+      [8, 14, 11], // 更高的低点
+      [10, 11, 15], // 再次突破
+    ]);
+    const structure = detectLow123(bars(twoBases), { swingWindow, lookback: 120 });
+    expect(structure).not.toBeNull();
+    // 取到的是后一个结构：高点 2 是 14 而不是 12
+    expect(structure!.h2.price).toBeGreaterThan(13);
+    expect(structure!.l3.price).toBeGreaterThan(10);
+  });
+
+  it("样本不足时返回 null 而不是硬凑", () => {
+    expect(detectLow123(bars([10, 11, 12]), { swingWindow, lookback: 60 })).toBeNull();
+    expect(detectLow123([], { swingWindow, lookback: 60 })).toBeNull();
   });
 });

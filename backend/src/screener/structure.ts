@@ -79,6 +79,99 @@ export function findSwingLows(bars: readonly DailyBar[], window: number): SwingP
   return out;
 }
 
+/** 一次摆动点：低点或高点，按时间顺序排列后用于识别形态。 */
+type Swing = SwingPoint & { kind: "low" | "high" };
+
+/**
+ * 低位 123 结构（书 A-3.1，全书最重要的形态规则）。
+ *
+ * 形状：低点 1 → 高点 2 → 低点 3，且**低点 3 高于低点 1**（底部抬高的上升结构）。
+ * 书的用法（L681/L689/L707）：
+ * - 入场 = 突破高点 2
+ * - 止损 = 低点 3（轻仓可用低点 1；跌破 3 减半、跌破 1 清仓）
+ */
+export type Low123Structure = {
+  /** 低点 1 */
+  l1: SwingPoint;
+  /** 高点 2 */
+  h2: SwingPoint;
+  /** 低点 3 */
+  l3: SwingPoint;
+  /** 最新收盘是否已突破高点 2 */
+  brokenOut: boolean;
+  /** 收盘相对高点 2 的偏离（比值）：未突破时为负 */
+  breakoutRatio: number;
+  /** 止损位 = 低点 3 */
+  stop: number;
+  /** 结构跨度（交易日） */
+  span: number;
+};
+
+/**
+ * 识别最近一次有效的低位 123 结构；没有则返回 null。
+ *
+ * 从**最近的高点往回找**：这样拿到的是"最新形成"的那个结构，
+ * 而不是历史上第一个碰巧成立的形态——后者早已失效，拿它当入场依据会错过当下。
+ *
+ * `lookback` 按严格度三档取值（宽松 120 / 标准 60 / 严格 30 个交易日）：
+ * 放宽窗口会捞到更久远的老结构，收紧则只认近期刚形成的。
+ */
+export function detectLow123(
+  bars: readonly DailyBar[],
+  options: { swingWindow?: number; lookback?: number } = {},
+): Low123Structure | null {
+  const window = options.swingWindow ?? 5;
+  const lookback = options.lookback ?? 60;
+  if (bars.length < window * 2 + 3) return null;
+
+  const from = Math.max(0, bars.length - lookback);
+  const swings: Swing[] = [
+    ...findSwingLows(bars, window).map((p) => ({ ...p, kind: "low" as const })),
+    ...findSwingHighs(bars, window).map((p) => ({ ...p, kind: "high" as const })),
+  ]
+    .filter((p) => p.index >= from)
+    .sort((a, b) => a.index - b.index);
+
+  const close = (bars[bars.length - 1] as DailyBar).close;
+
+  // 从最近的高点往前找：最近的高点若两侧都有低点、且低点 3 高于低点 1，即为有效结构
+  for (let i = swings.length - 1; i >= 0; i--) {
+    const h2 = swings[i] as Swing;
+    if (h2.kind !== "high") continue;
+
+    let l1: SwingPoint | null = null;
+    for (let j = i - 1; j >= 0; j--) {
+      const candidate = swings[j] as Swing;
+      if (candidate.kind === "low") {
+        l1 = candidate;
+        break;
+      }
+    }
+    let l3: SwingPoint | null = null;
+    for (let j = i + 1; j < swings.length; j++) {
+      const candidate = swings[j] as Swing;
+      if (candidate.kind === "low") {
+        l3 = candidate;
+        break;
+      }
+    }
+    if (!l1 || !l3) continue;
+    // 书 L689：低点 3 必须高于低点 1，否则是继续下行的结构而不是底部抬高
+    if (l3.price <= l1.price) continue;
+
+    return {
+      l1,
+      h2,
+      l3,
+      brokenOut: close > h2.price,
+      breakoutRatio: h2.price > 0 ? close / h2.price - 1 : 0,
+      stop: l3.price,
+      span: l3.index - l1.index,
+    };
+  }
+  return null;
+}
+
 /**
  * 下降趋势线：把最近两个显著高点相连并延长，返回**最后一根 K 线处**的取值。
  *
