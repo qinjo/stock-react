@@ -1,6 +1,8 @@
 # 第三方研究用克隆（各自是独立 git 仓库，不入版本库）；笔记(.md)保留
 _research/*/
 !_research/*.md
+# 电子书原文件（第三方版权内容，只作本地研究素材，不入版本库）
+_research/*.azw3
 
 # 依赖
 node_modules/
@@ -15,6 +17,9 @@ dist/
 # 环境与密钥
 .env
 .env.local
+
+# 本地日K库与 bootstrap 产物：可再生的构建产物，不是源码（重建见 backend/package.json 的 bootstrap:kline）
+backend/data/
 
 # 系统文件
 .DS_Store

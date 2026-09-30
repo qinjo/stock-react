@@ -7,7 +7,9 @@
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "start": "tsx --env-file-if-exists=.env src/server.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bootstrap:kline": "tsx scripts/bootstrap-kline.ts",
+    "verify:kline": "tsx scripts/verify-kline-vs-snapshot.ts"
   },
   "dependencies": {
     "fastify": "^5.12.1",
