@@ -86,6 +86,20 @@ const success: ScreenResponse = {
   candidates: [candidate],
   inactiveRules: ["E-st", "U-marketCap"],
   degraded: { llmReview: true, reason: "大模型复核尚未接入，当前结果全部来自确定性规则" },
+  marketGate: {
+    state: "offense" as const,
+    indexCode: "sh000001",
+    indexClose: 3840.83,
+    indexMa60: 3700.0,
+    indexMa100: 3600.0,
+    threeMonthReturn: 0.052,
+    bookPosition: 1,
+    gatePosition: 1,
+    positionAdvice: 1,
+    growthIndexAboveMa100: true,
+    reason: "【进攻档】上证指数 3840.83 站上 MA100 3600.00，三个月上涨 5.2%",
+  },
+  suppressed: false,
   fromCache: false,
   increment: {
     ran: false,
@@ -396,5 +410,111 @@ describe("离场条件与参考压力位展示（#18）", () => {
     await renderResult();
     expect(screen.getByText(/基础池 337/)).toBeInTheDocument();
     expect(screen.getByText("24")).toBeInTheDocument();
+  });
+});
+
+/* ---------------------------- 大盘门（#22） ---------------------------- */
+
+describe("大盘门（#22）", () => {
+  async function renderWith(overrides: Partial<ScreenResponse>) {
+    stubFetch({ ok: true, body: { ...success, ...overrides } });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+  }
+
+  it("展示大盘门档位与今日建议总仓位", async () => {
+    await renderWith({});
+    expect(await screen.findByText("大盘门：进攻档")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText(/站上 MA100 3600\.00/)).toBeInTheDocument();
+  });
+
+  it("防守档给出半仓建议", async () => {
+    await renderWith({
+      marketGate: {
+        ...success.marketGate!,
+        state: "defense",
+        gatePosition: 0.5,
+        positionAdvice: 0.5,
+        reason: "【防守档】上证指数 3840.83 站上 MA100 3600.00，但三个月趋势不成立",
+      },
+    });
+    expect(await screen.findByText("大盘门：防守档")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("（半仓）")).toBeInTheDocument();
+  });
+
+  it("空仓档默认不出票：给出横幅、说明本来有几只，并提供逃生开关", async () => {
+    await renderWith({
+      suppressed: true,
+      candidates: [],
+      candidateTotal: 24,
+      marketGate: {
+        ...success.marketGate!,
+        state: "empty",
+        gatePosition: 0,
+        bookPosition: 0,
+        positionAdvice: 0,
+        reason: "【空仓档】上证指数 3400.00 跌破 MA100 3600.00",
+      },
+    });
+
+    expect(await screen.findByText("空仓信号：今天默认不出票")).toBeInTheDocument();
+    expect(screen.getByText(/仍有/)).toBeInTheDocument();
+    // 漏斗里的「有信号 24」与横幅里的「仍有 24 只」都会命中
+    expect(screen.getAllByText("24").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "仍要查看（忽略大盘门）" })).toBeInTheDocument();
+    // 不出票时不渲染候选卡片
+    expect(screen.queryByText("贵州茅台")).not.toBeInTheDocument();
+  });
+
+  it("点逃生开关后带 ignoreMarketGate 重新请求，并明确提示正在违反书的择时前提", async () => {
+    const emptyGate = {
+      ...success.marketGate!,
+      state: "empty" as const,
+      gatePosition: 0,
+      bookPosition: 0,
+      positionAdvice: 0,
+      reason: "【空仓档】上证指数 3400.00 跌破 MA100 3600.00",
+    };
+    // 按次序返回：第一次是"空仓抑制"，第二次才是"已忽略"
+    const bodies = [
+      { ...success, suppressed: true, candidates: [], candidateTotal: 24, marketGate: emptyGate },
+      {
+        ...success,
+        suppressed: false,
+        marketGate: emptyGate,
+        params: { ...success.params, ignoreMarketGate: true },
+      },
+    ];
+    let call = 0;
+    const fetchSpy = vi.fn((_input: RequestInfo | URL) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(bodies[Math.min(call++, bodies.length - 1)]),
+      } as Response),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+
+    await user.click(await screen.findByRole("button", { name: "仍要查看（忽略大盘门）" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("ignoreMarketGate=true");
+    await waitFor(() => expect(screen.getByText(/你已忽略大盘门/)).toBeInTheDocument());
+  });
+
+  it("创业板指跌破 MA100 时在理由里说明创业板不参与", async () => {
+    await renderWith({
+      marketGate: {
+        ...success.marketGate!,
+        growthIndexAboveMa100: false,
+        reason: "【进攻档】上证指数 3840.83 站上 MA100 3600.00；创业板指在 MA100 之下，创业板个股本轮不参与",
+      },
+    });
+    expect(await screen.findByText(/创业板指在 MA100 之下/)).toBeInTheDocument();
   });
 });

@@ -356,6 +356,27 @@ export type ScreenParams = {
   refresh: boolean;
 };
 
+export type MarketGateState = "offense" | "defense" | "empty";
+
+/** 大盘择时门：先看大盘，再谈个股（书第四章 + 表 4-1）。 */
+export type MarketGate = {
+  state: MarketGateState;
+  indexCode: string;
+  indexClose: number | null;
+  indexMa60: number | null;
+  indexMa100: number | null;
+  threeMonthReturn: number | null;
+  /** 书的仓位表套在指数上的仓位 */
+  bookPosition: number;
+  /** 大盘门档位对应的仓位上限 */
+  gatePosition: number;
+  /** 今日建议总仓位 = min(档位, 书的仓位表) */
+  positionAdvice: number;
+  /** 创业板指是否在 MA100 之上；缺数据为 null */
+  growthIndexAboveMa100: boolean | null;
+  reason: string;
+};
+
 export type ScreenResponse = {
   status: "ok";
   /** 库内最新交易日 `YYYY-MM-DD` */
@@ -370,6 +391,10 @@ export type ScreenResponse = {
   inactiveRules: string[];
   /** `llmReview: true` 表示本次结果未经大模型复核（降级） */
   degraded: { llmReview: boolean; reason: string | null };
+  /** 大盘门判定；缺指数数据时为 null */
+  marketGate: MarketGate | null;
+  /** 大盘空仓档且未打开逃生开关 → 本次不出票 */
+  suppressed: boolean;
   /** 本次结果直接来自当日缓存（零额外计算） */
   fromCache: boolean;
   /** 惰性刷新的执行情况：库落后时后端会先补当日行情再筛 */

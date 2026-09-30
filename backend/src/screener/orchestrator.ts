@@ -4,7 +4,8 @@ import { PromptCache } from "../cache.js";
 import { screenUniverse } from "./engine.js";
 import { loadUniverseFromStore } from "./load.js";
 import { toScreenResponse, type ScreenRequestParams, type ScreenResponse } from "./response.js";
-import type { ScreenerCriteria } from "./types.js";
+import { evaluateMarketGate, type IndexSeries } from "./market-gate.js";
+import type { MarketGateLike, ScreenerCriteria } from "./types.js";
 
 /**
  * 筛选编排：惰性刷新 + 当日缓存 + 全市场遍历。
@@ -78,6 +79,26 @@ export function shanghaiDateKey(now: Date): number {
   return Number(text.replace(/-/g, ""));
 }
 
+/** 从库内指数日线读一段收盘序列；不足 100 根视为没有可用数据。 */
+function readIndexSeries(store: MarketStore, code: string, limit: number): IndexSeries | null {
+  const bars = store.readIndexBars(code, limit);
+  if (bars.length < 100) return null;
+  return { code, closes: bars.map((bar) => bar.close) };
+}
+
+/**
+ * 计算大盘门。
+ *
+ * 指数来自本地库（#12 的增量会一并补齐上证指数与创业板指），
+ * 因此这里不触网、也不额外请求。
+ */
+export function readMarketGate(store: MarketStore): MarketGateLike {
+  return evaluateMarketGate({
+    shanghai: readIndexSeries(store, "sh000001", 200),
+    growth: readIndexSeries(store, "sz399006", 200),
+  });
+}
+
 /**
  * 数据指纹：用 O(1) 的元数据而不是 `COUNT(*)` 去汇总七百万行。
  * `last_increment_at` 每次增量都会刷新，因此任何一次数据变化都会改变指纹。
@@ -147,6 +168,8 @@ export async function runScreen(
     }
 
     const dataDateKey = store.latestTradeDate() ?? before;
+    // 大盘门要在缓存键之前算出来——键里含它，否则昨天的"空仓档"会被当成今天的结果命中
+    const marketGate = readMarketGate(store);
     const fingerprint = cacheFingerprint(store);
     const cacheKey = PromptCache.keyFor(
       "screen",
@@ -157,6 +180,8 @@ export async function runScreen(
         options.params.boards.join(","),
         options.criteria.includeBeijing,
         options.params.ignoreMarketGate,
+        // 大盘门随行情变化：不纳入键的话，昨天的"空仓档"会被当成今天的结果命中
+        `${marketGate.state}:${marketGate.positionAdvice}`,
         fingerprint,
       ].join("|"),
     );
@@ -177,6 +202,7 @@ export async function runScreen(
     const outcome = screenUniverse(
       loadUniverseFromStore(store, { codeFilter: (row) => allowed.has(row.board) }),
       options.criteria,
+      { marketGate },
     );
 
     const names = new Map(store.listInstruments().map((row) => [row.code, row.name] as const));

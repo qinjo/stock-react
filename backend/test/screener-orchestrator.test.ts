@@ -23,7 +23,7 @@ let store: MarketStore;
 /** 库内最新交易日（夹具生成的），用于构造"已是最新"与"落后一天"两种时钟 */
 let latestDateKey: number;
 
-const CRITERIA: ScreenerCriteria = { mode: "trend", strictness: "standard", includeBeijing: false };
+const CRITERIA: ScreenerCriteria = { mode: "trend", strictness: "standard", includeBeijing: false, ignoreMarketGate: false };
 const PARAMS: ScreenRequestParams = {
   mode: "trend",
   strictness: "standard",

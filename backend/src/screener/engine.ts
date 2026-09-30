@@ -4,6 +4,7 @@ import { trendR2 } from "./structure.js";
 import { evaluateSignals } from "./signals.js";
 import type {
   FunnelCounts,
+  MarketGateLike,
   ScreenMetrics,
   ScreenOutcome,
   ScreenVerdict,
@@ -57,6 +58,7 @@ function metricsOf(ctx: ReturnType<typeof buildContext>): ScreenMetrics {
 export function screenUniverse(
   inputs: Iterable<SecurityInput>,
   criteria: ScreenerCriteria = DEFAULT_CRITERIA,
+  options: { marketGate?: MarketGateLike | null } = {},
 ): ScreenOutcome {
   const params = paramsFor(criteria.strictness);
   const funnel: FunnelCounts = {
@@ -71,9 +73,15 @@ export function screenUniverse(
   /** 每条规则：有多少标的走到了它、其中多少因缺数据而无法判定 */
   const reach = new Map<string, { reached: number; unknown: number }>();
 
+  const marketGate = options.marketGate ?? null;
+  // 空仓档默认不出票（书 P9：空仓时间应长于持仓时间）；逃生开关可覆盖。
+  // 注意这里只是标记，候选仍然照常算出来——漏斗计数要如实，
+  // "有多少符合个股条件"与"要不要给出来"是两件事。
+  const suppressed = marketGate?.state === "empty" && !criteria.ignoreMarketGate;
+
   for (const security of inputs) {
     funnel.universe++;
-    const ctx = buildContext(security, params, criteria);
+    const ctx = buildContext(security, params, criteria, marketGate);
     const { passed, rejectedBy, hits, unknownRules } = evaluateRules(ctx);
 
     // 记录到达情况：用于识别"因为一直缺数据而实际没生效"的规则
@@ -119,5 +127,5 @@ export function screenUniverse(
     return entry !== undefined && entry.reached > 0 && entry.unknown === entry.reached;
   }).map((rule) => rule.id);
 
-  return { criteria, funnel, shortlisted, inactiveRules };
+  return { criteria, funnel, shortlisted, inactiveRules, marketGate, suppressed };
 }

@@ -3,6 +3,7 @@ import { getScreen } from "../api";
 import {
   ApiError,
   type ApiErrorCode,
+  type MarketGate,
   type BoardName,
   type ScreenCandidate,
   type ScreenMode,
@@ -75,6 +76,8 @@ export default function ScreenerPanel({ onPick }: Props) {
   const [mode, setMode] = useState<ScreenMode>("trend");
   const [strictness, setStrictness] = useState<Strictness>("standard");
   const [boards, setBoards] = useState<BoardName[]>(DEFAULT_BOARDS);
+  /** 逃生开关：大盘空仓档时默认不出票，打开它才照常出票 */
+  const [ignoreMarketGate, setIgnoreMarketGate] = useState(false);
   const [state, setState] = useState<ScreenState>({ kind: "idle" });
 
   function toggleBoard(board: BoardName) {
@@ -83,14 +86,21 @@ export default function ScreenerPanel({ onPick }: Props) {
     );
   }
 
-  async function run() {
+  async function run(override?: { ignoreMarketGate?: boolean }) {
     if (boards.length === 0) {
       setState({ kind: "error", code: "INVALID_INPUT", message: "至少要选择一个板块" });
       return;
     }
+    const gateOverride = override?.ignoreMarketGate ?? ignoreMarketGate;
+    setIgnoreMarketGate(gateOverride);
     setState({ kind: "loading" });
     try {
-      const data = await getScreen({ mode, strictness, boards });
+      const data = await getScreen({
+        mode,
+        strictness,
+        boards,
+        ...(gateOverride ? { ignoreMarketGate: true } : {}),
+      });
       setState({ kind: "success", data });
     } catch (err) {
       if (err instanceof ApiError) {
@@ -172,7 +182,7 @@ export default function ScreenerPanel({ onPick }: Props) {
 
           <button
             type="button"
-            onClick={run}
+            onClick={() => void run()}
             disabled={loading}
             className="rounded bg-slate-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
@@ -193,7 +203,13 @@ export default function ScreenerPanel({ onPick }: Props) {
 
       {state.kind === "error" && <ErrorBox code={state.code} message={state.message} />}
 
-      {state.kind === "success" && <ResultView data={state.data} onPick={onPick} />}
+      {state.kind === "success" && (
+        <ResultView
+          data={state.data}
+          onPick={onPick}
+          onIgnoreMarketGate={() => void run({ ignoreMarketGate: true })}
+        />
+      )}
     </section>
   );
 }
@@ -233,14 +249,39 @@ function ErrorBox({ code, message }: { code: ApiErrorCode; message: string }) {
 function ResultView({
   data,
   onPick,
+  onIgnoreMarketGate,
 }: {
   data: ScreenResponse;
   onPick: (target: { code: string; name: string }) => void;
+  onIgnoreMarketGate: () => void;
 }) {
   const { funnel } = data;
 
   return (
     <div className="space-y-4">
+      {data.marketGate && <MarketGateBanner gate={data.marketGate} ignored={data.params.ignoreMarketGate} />}
+
+      {data.suppressed && (
+        <div role="alert" className="rounded-lg border border-slate-300 bg-slate-100 p-4 text-sm text-slate-800">
+          <p className="font-medium">空仓信号：今天默认不出票</p>
+          <p className="mt-1 text-xs">
+            源书主张「空仓时间应长于持仓时间」，跌破 MA100 时短线操作应当停手。
+            本次仍有 <span className="font-medium">{data.candidateTotal}</span> 只符合个股条件，
+            但按书的择时前提不建议现在动手。
+          </p>
+          <button
+            type="button"
+            onClick={onIgnoreMarketGate}
+            className="mt-2 rounded border border-slate-400 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+          >
+            仍要查看（忽略大盘门）
+          </button>
+          <p className="mt-1 text-[11px] text-slate-500">
+            点击后你将看到候选，但那是在**违反书的择时前提**下给出的。
+          </p>
+        </div>
+      )}
+
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-medium text-slate-700">
@@ -307,6 +348,36 @@ function ResultView({
         源书作者自述该系统胜率约「牛市 50%、熊市 30%」，并主张空仓时间应长于持仓时间——
         请据此校准预期。结果未经基本面与合规审查。
       </p>
+    </div>
+  );
+}
+
+const GATE_STYLE: Record<string, { box: string; label: string; position: string }> = {
+  offense: { box: "border-emerald-200 bg-emerald-50 text-emerald-900", label: "进攻", position: "满仓" },
+  defense: { box: "border-amber-200 bg-amber-50 text-amber-900", label: "防守", position: "半仓" },
+  empty: { box: "border-red-200 bg-red-50 text-red-800", label: "空仓", position: "空仓" },
+};
+
+function MarketGateBanner({ gate, ignored }: { gate: MarketGate; ignored: boolean }) {
+  const style = GATE_STYLE[gate.state] ?? GATE_STYLE.defense!;
+  const positionPct = `${Math.round(gate.positionAdvice * 100)}%`;
+
+  return (
+    <div className={`rounded-lg border p-3 text-sm ${style.box}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-medium">大盘门：{style.label}档</p>
+        <p className="text-xs">
+          今日建议总仓位
+          <span className="ml-1 font-medium">{positionPct}</span>
+          <span className="ml-1 opacity-70">（{style.position}）</span>
+        </p>
+      </div>
+      <p className="mt-1 text-xs opacity-90">{gate.reason}</p>
+      {ignored && gate.state === "empty" && (
+        <p className="mt-1 text-xs font-medium">
+          ⚠ 你已忽略大盘门：以下候选是在违反书的择时前提（跌破 MA100 应停手）的情况下给出的。
+        </p>
+      )}
     </div>
   );
 }

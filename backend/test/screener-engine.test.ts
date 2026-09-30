@@ -69,11 +69,13 @@ describe("screenUniverse 漏斗分档", () => {
       mode: "trend",
       strictness: "loose",
       includeBeijing: true,
+      ignoreMarketGate: false,
     });
     expect(outcomeWithBeijing.criteria).toEqual({
       mode: "trend",
       strictness: "loose",
       includeBeijing: true,
+      ignoreMarketGate: false,
     });
     // 打开北交所后 600006 进入候选
     expect(outcomeWithBeijing.shortlisted.map((v) => v.code)).toContain("600006");
@@ -141,5 +143,89 @@ describe("候选画像", () => {
   it("全程位于 MA100 之上时，上穿时点记为 null（而不是硬编一个数）", () => {
     const outcome = screenUniverse([goodSecurity()]);
     expect(outcome.shortlisted[0]?.metrics.barsSinceMa100Cross).toBeNull();
+  });
+});
+
+/* ------------------------------- 大盘门（#22） ------------------------------- */
+
+/** 造一个大盘门判定；只关心 state 与创业板指条件。 */
+function gateOf(state: "offense" | "defense" | "empty", growthAbove: boolean | null = true) {
+  const position = state === "offense" ? 1 : state === "defense" ? 0.5 : 0;
+  return {
+    state,
+    indexCode: "sh000001",
+    indexClose: 3000,
+    indexMa60: 2900,
+    indexMa100: 2800,
+    threeMonthReturn: 0.05,
+    bookPosition: position,
+    gatePosition: position,
+    positionAdvice: position,
+    growthIndexAboveMa100: growthAbove,
+    reason: `【测试】${state}`,
+  };
+}
+
+describe("大盘门（#22）", () => {
+  it("空仓档默认不出票，但个股层面的漏斗与数量仍如实给出", () => {
+    const outcome = screenUniverse([goodSecurity()], DEFAULT_CRITERIA, {
+      marketGate: gateOf("empty"),
+    });
+    expect(outcome.suppressed).toBe(true);
+    // "有多少符合个股条件"与"要不要给出来"是两件事
+    expect(outcome.funnel.shortlisted).toBe(1);
+    expect(outcome.funnel.signalEligible).toBe(1);
+    expect(outcome.marketGate?.state).toBe("empty");
+  });
+
+  it("进攻/防守档不出票抑制照常出票", () => {
+    for (const state of ["offense", "defense"] as const) {
+      const outcome = screenUniverse([goodSecurity()], DEFAULT_CRITERIA, {
+        marketGate: gateOf(state),
+      });
+      expect(outcome.suppressed, state).toBe(false);
+      expect(outcome.shortlisted, state).toHaveLength(1);
+    }
+  });
+
+  it("逃生开关可覆盖空仓档（用户明确承担违反书的择时前提）", () => {
+    const outcome = screenUniverse(
+      [goodSecurity()],
+      { ...DEFAULT_CRITERIA, ignoreMarketGate: true },
+      { marketGate: gateOf("empty") },
+    );
+    expect(outcome.suppressed).toBe(false);
+    expect(outcome.shortlisted).toHaveLength(1);
+  });
+
+  it("创业板指在 MA100 之下时剔除创业板个股，主板不受影响", () => {
+    const growth = goodSecurity({ code: "300750", board: "growth" });
+    const main = goodSecurity({ code: "600519", board: "main" });
+
+    const blocked = screenUniverse([growth, main], DEFAULT_CRITERIA, {
+      marketGate: gateOf("offense", false),
+    });
+    expect(blocked.shortlisted.map((v) => v.code)).toEqual(["600519"]);
+
+    const allowed = screenUniverse([growth, main], DEFAULT_CRITERIA, {
+      marketGate: gateOf("offense", true),
+    });
+    expect(allowed.shortlisted.map((v) => v.code).sort()).toEqual(["300750", "600519"]);
+  });
+
+  it("创业板指数据缺失时不据此剔除，并把它标为未判定", () => {
+    const growth = goodSecurity({ code: "300750", board: "growth" });
+    const outcome = screenUniverse([growth], DEFAULT_CRITERIA, {
+      marketGate: gateOf("offense", null),
+    });
+    expect(outcome.shortlisted).toHaveLength(1);
+    expect(outcome.shortlisted[0]?.unknownRules).toContain("U-growthIndexGate");
+  });
+
+  it("没有大盘门数据（null）时不影响筛选", () => {
+    const outcome = screenUniverse([goodSecurity()], DEFAULT_CRITERIA, { marketGate: null });
+    expect(outcome.suppressed).toBe(false);
+    expect(outcome.shortlisted).toHaveLength(1);
+    expect(outcome.marketGate).toBeNull();
   });
 });

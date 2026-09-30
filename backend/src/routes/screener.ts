@@ -110,7 +110,12 @@ export function parseScreenQuery(query: ScreenQuery): {
 
   return {
     params,
-    criteria: { mode, strictness, includeBeijing: boards.includes("bj") },
+    criteria: {
+      mode,
+      strictness,
+      includeBeijing: boards.includes("bj"),
+      ignoreMarketGate: params.ignoreMarketGate,
+    },
     limit: Math.min(rawLimit, MAX_LIMIT),
   };
 }

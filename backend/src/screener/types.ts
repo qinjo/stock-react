@@ -56,6 +56,11 @@ export type ScreenerCriteria = {
   strictness: Strictness;
   /** 是否纳入北交所（默认排除：30% 涨跌幅 + 流动性薄） */
   includeBeijing: boolean;
+  /**
+   * 逃生开关：大盘空仓档时默认不出票，打开它才照常出票。
+   * 这不是"关闭一个功能"，而是明确让用户承担"违反书的择时前提"这件事。
+   */
+  ignoreMarketGate: boolean;
 };
 
 /** 规则来源：书内明确 / 书内但阈值为推断 / 项目自加的补丁 */
@@ -187,4 +192,23 @@ export type ScreenOutcome = {
   shortlisted: ScreenVerdict[];
   /** 因数据缺失而未生效的规则 id 汇总（例如未接快照时的流通市值闸门） */
   inactiveRules: string[];
+  /** 大盘门判定；缺指数数据时为 null */
+  marketGate: MarketGateLike | null;
+  /** 大盘空仓档且未打开逃生开关 → 本次不出票 */
+  suppressed: boolean;
+};
+
+/** 大盘门的最小形状（避免 types ↔ market-gate 互相引用）。 */
+export type MarketGateLike = {
+  state: "offense" | "defense" | "empty";
+  indexCode: string;
+  indexClose: number | null;
+  indexMa60: number | null;
+  indexMa100: number | null;
+  threeMonthReturn: number | null;
+  bookPosition: number;
+  gatePosition: number;
+  positionAdvice: number;
+  growthIndexAboveMa100: boolean | null;
+  reason: string;
 };

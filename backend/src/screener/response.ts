@@ -3,6 +3,7 @@ import type { Board } from "../market/qlib.js";
 import type {
   ExitPlan,
   FunnelCounts,
+  MarketGateLike,
   ReferenceResistance,
   RuleSource,
   ScreenOutcome,
@@ -79,6 +80,10 @@ export type ScreenResponse = {
   inactiveRules: string[];
   /** 降级标记：`true` 表示本次结果**未经**大模型复核（复核接入前恒为 true） */
   degraded: { llmReview: boolean; reason: string | null };
+  /** 大盘门判定（含建议总仓位）；缺指数数据时为 null */
+  marketGate: MarketGateLike | null;
+  /** 大盘空仓档且未打开逃生开关 → 本次不出票；漏斗与候选总数仍然如实给出 */
+  suppressed: boolean;
 };
 
 const NULL_LAST = Number.MAX_SAFE_INTEGER;
@@ -169,9 +174,11 @@ export function toScreenResponse(
   },
 ): ScreenResponse {
   const ranked = rankShortlist(outcome.shortlisted);
-  const candidates = ranked
-    .slice(0, options.limit)
-    .map((verdict) => toCandidate(verdict, options.nameOf));
+  // 空仓档不出票：候选清空，但 `candidateTotal` 保留真实数量——
+  // 让界面能说出"本次有 N 只符合个股条件，但大盘空仓"，而不是连这个信息也吞掉
+  const candidates = outcome.suppressed
+    ? []
+    : ranked.slice(0, options.limit).map((verdict) => toCandidate(verdict, options.nameOf));
 
   return {
     status: "ok",
@@ -182,6 +189,8 @@ export function toScreenResponse(
     candidateTotal: outcome.shortlisted.length,
     candidates,
     inactiveRules: outcome.inactiveRules,
+    marketGate: outcome.marketGate,
+    suppressed: outcome.suppressed,
     // 大模型复核尚未接入：显式标为"未经 AI 复核"，而不是让界面以为已经复核过
     degraded: { llmReview: true, reason: "大模型复核尚未接入，当前结果全部来自确定性规则" },
   };

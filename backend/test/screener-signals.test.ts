@@ -241,6 +241,8 @@ describe("排序：档序优先，档内按止损空间", () => {
           { code: "strong", passed: true, rejectedBy: null, hits: [], unknownRules: [], metrics: {} as never, signals: strong.signals, exit: strong.exit, resistance: [] },
         ],
         inactiveRules: [],
+        marketGate: null,
+        suppressed: false,
       },
       { dataDateKey: 20260930, refreshedAt: new Date("2026-09-30T04:00:00Z"), params: {
         mode: "trend", strictness: "standard", boards: ["main"], ignoreMarketGate: false, refresh: false,

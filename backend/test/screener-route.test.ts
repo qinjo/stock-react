@@ -68,6 +68,19 @@ beforeAll(() => {
   resetDates();
   seed(store, goodSecurity({ code: "920002" }), "bj", "万达轴承");
   latestDateKey = store.latestTradeDate() as number;
+
+  // 指数日线：大盘门要据此判定，因此必须真的种进去（否则只会走"缺数据"的兜底）
+  const indexCloses = Array.from({ length: 150 }, (_, i) => 3000 + i * 5);
+  const indexRows = indexCloses.map((close, i) => ({
+    date: (goodSecurity().bars[0] as { date: number }).date + i,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: 1,
+  }));
+  store.insertIndexBars("sh000001", indexRows);
+  store.insertIndexBars("sz399006", indexRows);
   store.close();
 });
 
@@ -265,5 +278,68 @@ describe("GET /api/screen 错误契约", () => {
     expect(body.candidateTotal).toBe(0);
     expect(body.candidates).toEqual([]);
     expect(body.funnel.shortlisted).toBe(0);
+  });
+});
+
+/* ------------------------------- 大盘门（#22） ------------------------------- */
+
+describe("GET /api/screen 的大盘门", () => {
+  it("响应带上大盘门判定与建议总仓位", async () => {
+    const body = (await app().inject({ method: "GET", url: "/api/screen" })).json();
+    expect(body.marketGate).toBeTruthy();
+    expect(body.marketGate.state).toBe("offense");
+    expect(body.marketGate.positionAdvice).toBeGreaterThan(0);
+    expect(body.marketGate.reason).toContain("进攻档");
+    expect(body.suppressed).toBe(false);
+  });
+
+  it("空仓档默认不出票：候选清空，但候选总数与漏斗仍如实给出", async () => {
+    const emptyPath = join(dir, "empty-gate.sqlite");
+    const store = new MarketStore(emptyPath);
+    store.migrate();
+    resetDates();
+    seed(store, goodSecurity({ code: "000001" }), "main", "平安银行");
+    const last = store.latestTradeDate() as number;
+    // 指数一路下跌 → 跌破 MA100 → 空仓档
+    const falling = Array.from({ length: 150 }, (_, i) => ({ date: last - 149 + i, open: 3000 - i * 5, high: 3000 - i * 5, low: 3000 - i * 5, close: 3000 - i * 5, volume: 1 }));
+    store.insertIndexBars("sh000001", falling);
+    store.insertIndexBars("sz399006", falling);
+    store.close();
+
+    const emptyApp = buildApp({
+      screener: { openStore: () => new MarketStore(emptyPath), runIncrement: async () => noopStats() },
+    });
+    const res = await emptyApp.inject({ method: "GET", url: "/api/screen" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    expect(body.marketGate.state).toBe("empty");
+    expect(body.suppressed).toBe(true);
+    expect(body.candidates).toEqual([]);
+    // 但"本来有几只符合个股条件"必须还能看到，否则用户无从判断要不要用逃生开关
+    expect(body.candidateTotal).toBe(1);
+    expect(body.funnel.signalEligible).toBe(1);
+  });
+
+  it("ignoreMarketGate=true 时照常出票（逃生开关）", async () => {
+    const openPath = join(dir, "empty-gate-2.sqlite");
+    const store = new MarketStore(openPath);
+    store.migrate();
+    resetDates();
+    seed(store, goodSecurity({ code: "000001" }), "main", "平安银行");
+    const last = store.latestTradeDate() as number;
+    const falling = Array.from({ length: 150 }, (_, i) => ({ date: last - 149 + i, open: 3000 - i * 5, high: 3000 - i * 5, low: 3000 - i * 5, close: 3000 - i * 5, volume: 1 }));
+    store.insertIndexBars("sh000001", falling);
+    store.insertIndexBars("sz399006", falling);
+    store.close();
+
+    const openApp = buildApp({
+      screener: { openStore: () => new MarketStore(openPath), runIncrement: async () => noopStats() },
+    });
+    const res = await openApp.inject({ method: "GET", url: "/api/screen?ignoreMarketGate=true" });
+    const body = res.json();
+    expect(body.params.ignoreMarketGate).toBe(true);
+    expect(body.suppressed).toBe(false);
+    expect(body.candidates).toHaveLength(1);
   });
 });

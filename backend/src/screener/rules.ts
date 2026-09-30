@@ -1,6 +1,6 @@
 import { adjustedPrice, countCrossings, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, macdDifSeries, rangeBounds, smaSeries } from "./structure.js";
 import type { ScreenerParams } from "./params.js";
-import type { DailyBar, RuleHit, RuleOutcome, RuleSource, ScreenerCriteria, SecurityInput, FunnelStage } from "./types.js";
+import type { DailyBar, FunnelStage, MarketGateLike, RuleHit, RuleOutcome, RuleSource, ScreenerCriteria, SecurityInput } from "./types.js";
 
 /**
  * 规则定义：声明式、逐条可溯源。
@@ -31,6 +31,8 @@ export type RuleContext = {
   dif: number[];
   /** 逐根涨停标记 */
   limitUp: boolean[];
+  /** 大盘门判定；缺指数数据时为 null */
+  marketGate: MarketGateLike | null;
 };
 
 /** 后复权价 → 真实成交价：除以最新一根的因子。结构位、止损位都要落到这个口径上。 */
@@ -261,6 +263,22 @@ export const RULES: readonly Rule[] = [
     },
   },
   {
+    id: "U-growthIndexGate",
+    label: "创业板指在 MA100 之上（做创业板股时）",
+    stage: "shortlist",
+    source: "book",
+    bookRef: "L1033",
+    evaluate: ({ security, marketGate }) => {
+      if (security.board !== "growth") return ok("非创业板股票，不受创业板指约束");
+      if (!marketGate || marketGate.growthIndexAboveMa100 === null) {
+        return unknown("创业板指数据缺失，未据此剔除");
+      }
+      return marketGate.growthIndexAboveMa100
+        ? ok("创业板指在 MA100 之上")
+        : fail("创业板指在 MA100 之下，创业板个股本轮不参与（书 L1033–1045）");
+    },
+  },
+  {
     id: "U-aboveTrendline",
     label: "不买在下降趋势线之下",
     stage: "shortlist",
@@ -311,6 +329,7 @@ export function buildContext(
   security: SecurityInput,
   params: ScreenerParams,
   criteria: ScreenerCriteria,
+  marketGate: MarketGateLike | null = null,
 ): RuleContext {
   const bars = security.bars;
   // 后复权序列：跨除权保持连续，均线/结构一律在它上面算
@@ -338,6 +357,7 @@ export function buildContext(
     ma100: smaSeries(adjCloses, 100),
     dif: macdDifSeries(adjCloses),
     limitUp: limitUpFlags(bars, security.board),
+    marketGate,
   };
 }
 
