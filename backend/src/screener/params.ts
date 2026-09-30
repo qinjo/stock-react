@@ -56,6 +56,10 @@ export type ScreenerParams = {
   stopSpaceMax: number;
   /** 走势流畅度要求（20 日对数价格回归 R²）；null 表示不要求 */
   trendR2Min: number | null;
+  /** 「前期大幅回调」的最小回撤（S12 涨停 B 形态用） */
+  pullbackMinDrawdown: number;
+  /** 「前期大幅回调」的观察窗口（交易日） */
+  pullbackWindow: number;
 };
 
 const ALL_TIERS: Record<Strictness, ScreenerParams> = {
@@ -71,6 +75,8 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
     rangeWindow: 60,
     rangeWidthMax: 0.25,
     rangeProgressMax: 0.5,
+    pullbackMinDrawdown: 0.15,
+    pullbackWindow: 30,
     limitUpStreakMax: 5,
     limitUpStreakWindow: 20,
     low123Lookback: 120,
@@ -91,6 +97,8 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
     rangeWindow: 60,
     rangeWidthMax: 0.2,
     rangeProgressMax: 0.5,
+    pullbackMinDrawdown: 0.15,
+    pullbackWindow: 30,
     limitUpStreakMax: 3,
     limitUpStreakWindow: 20,
     low123Lookback: 60,
@@ -111,6 +119,8 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
     rangeWindow: 60,
     rangeWidthMax: 0.15,
     rangeProgressMax: 0.5,
+    pullbackMinDrawdown: 0.15,
+    pullbackWindow: 30,
     limitUpStreakMax: 2,
     limitUpStreakWindow: 20,
     low123Lookback: 30,
@@ -218,6 +228,16 @@ export const PARAM_PROVENANCE: Record<keyof ScreenerParams, ParamProvenance> = {
     source: "inferred",
     ref: "L1767",
     note: "书说止损空间过大不宜入市，比例上限由我们定",
+  },
+  pullbackMinDrawdown: {
+    source: "inferred",
+    ref: "L1477",
+    note: "书说「前期大幅快速回调」，深度阈值由我们定",
+  },
+  pullbackWindow: {
+    source: "inferred",
+    ref: "L1477",
+    note: "回调的观察窗口由我们定",
   },
   trendR2Min: {
     source: "inferred",

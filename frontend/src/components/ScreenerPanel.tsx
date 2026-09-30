@@ -375,7 +375,7 @@ function ResultView({
       ) : (
         <ul className="space-y-2">
           {data.candidates.map((candidate) => (
-            <CandidateCard key={candidate.code} candidate={candidate} onPick={onPick} />
+            <CandidateCard key={candidate.code} candidate={candidate} mode={data.params.mode} onPick={onPick} />
           ))}
         </ul>
       )}
@@ -489,20 +489,36 @@ function RuleDetails({ hits }: { hits: ScreenRuleHit[] }) {
   );
 }
 
-/** 档序 → 中文名，与后端 TIER_OF 一一对应。 */
-const TIER_LABELS: Record<number, string> = {
-  1: "底背离双突破",
-  2: "低位 123",
-  3: "三档入场",
-  4: "MA20 上穿",
-  5: "阻力突破 / 支撑回踩",
+/** 档序 → 中文名，与后端的 TIER_OF / EVENT_TIER_OF 一一对应。 */
+const TIER_LABELS: Record<ScreenMode, Record<number, string>> = {
+  trend: {
+    1: "底背离双突破",
+    2: "低位 123",
+    3: "三档入场",
+    4: "MA20 上穿",
+    5: "阻力突破 / 支撑回踩",
+  },
+  event: {
+    1: "涨停 + 低位 123",
+    2: "涨停 B 形态",
+    3: "突破性涨停",
+    4: "向上突破性缺口",
+    5: "向上持续性缺口",
+  },
 };
+
+/** 档位徽章文案：档号在两种模式下含义不同，标签必须跟着模式走。 */
+function tierLabel(mode: ScreenMode, tier: number): string {
+  return TIER_LABELS[mode][tier] ?? "信号";
+}
 
 function CandidateCard({
   candidate,
+  mode,
   onPick,
 }: {
   candidate: ScreenCandidate;
+  mode: ScreenMode;
   onPick: (target: { code: string; name: string }) => void;
 }) {
   const { metrics, exit } = candidate;
@@ -523,7 +539,7 @@ function CandidateCard({
           <span className="text-xs text-slate-400">{candidate.code}</span>
           {candidate.signalTier !== null && (
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
-              档{candidate.signalTier} · {TIER_LABELS[candidate.signalTier] ?? "信号"}
+              档{candidate.signalTier} · {tierLabel(mode, candidate.signalTier)}
             </span>
           )}
         </div>

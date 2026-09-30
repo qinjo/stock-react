@@ -1,6 +1,6 @@
-import { adjustedPrice, countCrossings, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, macdDifSeries, rangeBounds, smaSeries } from "./structure.js";
+import { adjustedPrice, countCrossings, countLimitUp, detectLow123, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, macdDifSeries, rangeBounds, smaSeries } from "./structure.js";
 import type { ScreenerParams } from "./params.js";
-import type { DailyBar, FunnelStage, MarketGateLike, RuleHit, RuleOutcome, RuleSource, ScreenerCriteria, SecurityInput } from "./types.js";
+import type { DailyBar, FunnelStage, MarketGateLike, RuleHit, RuleOutcome, RuleSource, ScreenerCriteria, ScreenerMode, SecurityInput } from "./types.js";
 
 /**
  * 规则定义：声明式、逐条可溯源。
@@ -62,6 +62,8 @@ export type Rule = {
   stage: FunnelStage;
   source: RuleSource;
   bookRef?: string;
+  /** 只在这些模式下适用；不填表示两种模式都适用 */
+  modes?: ScreenerMode[];
   evaluate: (ctx: RuleContext) => RuleOutcome;
 };
 
@@ -170,6 +172,11 @@ export const RULES: readonly Rule[] = [
     stage: "hardFilters",
     source: "book",
     bookRef: "L1537",
+    // 只适用于均线模式。事件模式的信号（突破性涨停 / 涨停+低位123 / 涨停 B 形态）
+    // 本来就产生在涨停日——书 L1545 明说「低点 3 后出现涨停并突破高点 2……可以买入」，
+    // 它禁止的只是"在封板价买入"这个动作，而不是"把涨停股列为候选"。
+    // 因此在事件模式里改为把这条纪律写进离场计划（见 signals.ts 的 buildExitPlan）。
+    modes: ["trend"],
     evaluate: ({ bars, security }) => {
       if (bars.length < 2) return unknown("不足 2 根日线，无法计算涨停价");
       const last = bars[bars.length - 1] as DailyBar;
@@ -204,6 +211,11 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L597",
+    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
+    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
+    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
+    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
+    modes: ["trend"],
     evaluate: ({ adjBars, ma100 }) => {
       const lastIndex = adjBars.length - 1;
       const ma = ma100[lastIndex];
@@ -254,6 +266,11 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L663",
+    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
+    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
+    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
+    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
+    modes: ["trend"],
     evaluate: ({ adjBars, ma100, params }) => {
       const closes = adjBars.map((bar) => bar.close);
       const crossings = countCrossings(closes, ma100, 20);
@@ -278,12 +295,77 @@ export const RULES: readonly Rule[] = [
         : fail("创业板指在 MA100 之下，创业板个股本轮不参与（书 L1033–1045）");
     },
   },
+  /* --------------------------- 事件模式的排除条款 --------------------------- */
+  {
+    id: "X-highLimitUp",
+    label: "剔除高位涨停（MA100 之上）",
+    stage: "shortlist",
+    source: "book",
+    bookRef: "L1461",
+    modes: ["event"],
+    evaluate: ({ adjBars, ma100, limitUp }) => {
+      const n = adjBars.length;
+      if (limitUp[n - 1] !== true) return ok("当日未涨停");
+      const maNow = ma100[n - 1] ?? null;
+      const maPrev = ma100[n - 2] ?? null;
+      const close = (adjBars[n - 1] as DailyBar).close;
+      const prevClose = (adjBars[n - 2] as DailyBar).close;
+      // 前一根也在 MA100 之上才是"高位涨停"；从下方涨停收复 MA100 属于 S12 的形状
+      if (maNow !== null && maPrev !== null && close > maNow && prevClose > maPrev) {
+        return fail(`涨停发生在 MA100 ${maNow.toFixed(2)} 之上，属高位涨停（有出货嫌疑）`);
+      }
+      return ok("涨停位于 MA100 之下，或为从下方收复 MA100");
+    },
+  },
+  {
+    id: "X-limitUpBelowTrendline",
+    label: "剔除下降趋势线之下的涨停 / 旱地拔葱",
+    stage: "shortlist",
+    source: "book",
+    bookRef: "L1441",
+    modes: ["event"],
+    evaluate: ({ adjBars, params, limitUp }) => {
+      const n = adjBars.length;
+      if (limitUp[n - 1] !== true) return ok("当日未涨停");
+      const line = fallingTrendlineAt(adjBars, params.swingWindow, params.trendlineLookback);
+      if (line === null) return ok("近期未构成下降趋势线");
+      const close = (adjBars[n - 1] as DailyBar).close;
+      if (close >= line) return ok(`收盘 ${close.toFixed(2)} ≥ 下降趋势线 ${line.toFixed(2)}`);
+      const low123 = detectLow123(adjBars, {
+        swingWindow: params.swingWindow,
+        lookback: params.low123Lookback,
+      });
+      return low123?.brokenOut
+        ? ok("虽在下降趋势线之下，但已形成低位 123 结构")
+        : fail(`收盘 ${close.toFixed(2)} < 下降趋势线 ${line.toFixed(2)}，属反弹涨停（旱地拔葱）`);
+    },
+  },
+  {
+    id: "X-limitUpStreak",
+    label: "剔除连板后回调再涨停",
+    stage: "shortlist",
+    source: "book",
+    bookRef: "L1724",
+    modes: ["event"],
+    evaluate: ({ limitUp, params }) => {
+      if (limitUp[limitUp.length - 1] !== true) return ok("当日未涨停");
+      const count = countLimitUp(limitUp, params.limitUpStreakWindow);
+      return count >= params.limitUpStreakMax
+        ? fail(`近 ${params.limitUpStreakWindow} 日涨停 ${count} 次 ≥ ${params.limitUpStreakMax}，属连板后回调再涨停`)
+        : ok(`近 ${params.limitUpStreakWindow} 日涨停 ${count} 次 < ${params.limitUpStreakMax}`);
+    },
+  },
   {
     id: "U-aboveTrendline",
     label: "不买在下降趋势线之下",
     stage: "shortlist",
     source: "book",
     bookRef: "L585",
+    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
+    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
+    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
+    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
+    modes: ["trend"],
     evaluate: ({ adjBars, params }) => {
       const line = fallingTrendlineAt(adjBars, params.swingWindow, params.trendlineLookback);
       const close = adjBars[adjBars.length - 1]?.close;
@@ -299,6 +381,11 @@ export const RULES: readonly Rule[] = [
     stage: "shortlist",
     source: "book",
     bookRef: "L627",
+    // 位置类规则只适用于均线模式。源书第六章明确以「MA100 之下的低位涨停」为**优选**，
+    // 与第一章「只买入价格运行在 MA100 均线之上的股票」互斥；两者强行共用一个基础池，
+    // 会让 S10（作者称最强的信号）永远无法触发。事件模式改用事件自身的排除条款
+    // （X-highLimitUp / X-limitUpBelowTrendline / X-limitUpStreak）来把关。
+    modes: ["trend"],
     evaluate: ({ adjBars, params }) => {
       const bounds = rangeBounds(adjBars, params.rangeWindow);
       const close = adjBars[adjBars.length - 1]?.close;
@@ -375,6 +462,7 @@ export function evaluateRules(ctx: RuleContext): {
   for (const stage of ["exclusions", "hardFilters", "shortlist"] as FunnelStage[]) {
     for (const rule of RULES) {
       if (rule.stage !== stage) continue;
+      if (rule.modes && !rule.modes.includes(ctx.criteria.mode)) continue;
       const outcome = rule.evaluate(ctx);
       const hit: RuleHit = {
         id: rule.id,

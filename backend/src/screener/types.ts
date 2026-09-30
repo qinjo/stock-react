@@ -129,7 +129,7 @@ export type ScreenVerdict = {
 
 /* ------------------------------ 信号层类型 ------------------------------ */
 
-export type SignalId = "S1" | "S2" | "S3" | "S5" | "S13";
+export type SignalId = "S1" | "S2" | "S3" | "S5" | "S13" | "S6" | "S7" | "S9" | "S10" | "S12";
 
 export type SignalHit = {
   id: SignalId;
