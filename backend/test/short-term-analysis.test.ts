@@ -52,7 +52,8 @@ const validReport = {
   monitoring: ["收盘与 MA100 的距离"],
 };
 
-const chatOf = (content: string) => vi.fn(async () => ({ content: JSON.stringify(content) })) as unknown as ChatFn;
+const chatOf = (content: unknown) =>
+  vi.fn(async () => ({ content: JSON.stringify(content) })) as unknown as ChatFn;
 
 describe("短线视角的提示词", () => {
   it("四项判据齐全，并明确禁止目标价与量能指标", () => {

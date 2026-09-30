@@ -1,5 +1,6 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { Board, Market } from "./qlib.js";
+import type { ValuationRow } from "./valuation.js";
 
 /**
  * 本地日K库（单文件 SQLite，`node:sqlite`，零新增依赖）。
@@ -277,6 +278,64 @@ export class MarketStore {
        WHERE code = ?`,
     );
     for (const row of rows) stmt.run(row.name, row.floatMarketCap, row.code);
+  }
+
+  /* ------------------------------ 估值与行业 ------------------------------ */
+
+  /** 写入某个交易日的全市场估值与行业归属（幂等）。 */
+  insertValuation(rows: readonly ValuationRow[]): void {
+    const stmt = this.prepare(
+      `INSERT INTO valuation (code, date, close, pe_ttm, pb_mrq, ps_ttm, board_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(code, date) DO UPDATE SET
+         close = excluded.close, pe_ttm = excluded.pe_ttm, pb_mrq = excluded.pb_mrq,
+         ps_ttm = excluded.ps_ttm, board_name = excluded.board_name`,
+    );
+    for (const row of rows) {
+      stmt.run(row.code, row.date, row.close, row.peTtm, row.pbMrq, row.psTtm, row.boardName);
+    }
+  }
+
+  /** 估值表里最新的交易日；空表返回 null。 */
+  latestValuationDate(): number | null {
+    const row = this.prepare("SELECT MAX(date) AS d FROM valuation").get() as RawBar | undefined;
+    return row?.d ?? null;
+  }
+
+  /** 某个交易日已落地的估值行数（用于断点续跑）。 */
+  countValuation(date: number): number {
+    const row = this.prepare("SELECT COUNT(*) AS n FROM valuation WHERE date = ?").get(date) as
+      | RawBar
+      | undefined;
+    return row?.n ?? 0;
+  }
+
+  /** 交易日历里落在 [from, to] 内的日期，升序。 */
+  calendarDatesBetween(from: number, to: number): number[] {
+    const rows = this.prepare(
+      "SELECT date FROM trading_calendar WHERE date >= ? AND date <= ? ORDER BY date",
+    ).all(from, to) as unknown as Array<{ date: number }>;
+    return rows.map((row) => row.date);
+  }
+
+  /**
+   * 同一交易日的「日K收盘 vs 估值收盘」配对。
+   * 两个来源完全独立（Qlib dump vs 东财），因此这条比对有真实校验价值。
+   */
+  valuationClosePairs(date: number): Array<{
+    code: string;
+    barClose: number | null;
+    valuationClose: number | null;
+  }> {
+    return this.prepare(
+      `SELECT b.code AS code, b.close AS barClose, v.close AS valuationClose
+       FROM bars b LEFT JOIN valuation v ON v.code = b.code AND v.date = b.date
+       WHERE b.date = ?`,
+    ).all(date) as unknown as Array<{
+      code: string;
+      barClose: number | null;
+      valuationClose: number | null;
+    }>;
   }
 
   readInstrument(code: string): InstrumentRow | null {    const row = this.prepare(
