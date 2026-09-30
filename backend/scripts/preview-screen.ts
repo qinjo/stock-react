@@ -45,10 +45,6 @@ function parseArgs(argv: string[]): Options {
   return opts;
 }
 
-const pct = (v: number | null): string =>
-  v === null || !Number.isFinite(v) ? "—" : `${(v * 100).toFixed(1)}%`;
-const yi = (v: number | null): string =>
-  v === null || !Number.isFinite(v) ? "—" : `${(v / 1e8).toFixed(1)}亿`;
 
 function printOutcome(outcome: ScreenOutcome, sample: number): void {
   const { funnel } = outcome;

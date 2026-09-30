@@ -37,9 +37,6 @@ export const REVIEW_SYSTEM_PROMPT = [
   '- 只输出 JSON，形如 {"reviewed":[{"code":"600519","reason":"…"}]}。',
 ].join("\n");
 
-function fy(value: number | null | undefined, digits = 2): string {
-  return value === null || value === undefined ? "—" : value.toFixed(digits);
-}
 
 /** 只把模型判得动的东西喂给它：档序、信号、离场位、量化画像。 */
 export function buildReviewPrompt(

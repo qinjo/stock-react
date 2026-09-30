@@ -16,9 +16,8 @@ import { writeFileSync } from "node:fs";
 import { openMarketStore } from "../src/market/open.js";
 import { loadUniverseFromStore } from "../src/screener/load.js";
 import { screenUniverse } from "../src/screener/engine.js";
-import { toScreenResponse, rankShortlist } from "../src/screener/response.js";
+import { toScreenResponse } from "../src/screener/response.js";
 import { evaluateMarketGate } from "../src/screener/market-gate.js";
-import { paramsFor } from "../src/screener/params.js";
 import { fromDateKey, toDateKey } from "../src/market/qlib.js";
 import type { ScreenerMode, Strictness } from "../src/screener/types.js";
 

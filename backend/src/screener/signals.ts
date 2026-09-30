@@ -119,7 +119,7 @@ export function detectBullishDivergence(
 }
 
 function detectSignals(ctx: RuleContext): SignalHit[] {
-  const { adjBars, ma10, ma20, ma60, ma100, dif, params } = ctx;
+  const { adjBars, ma20, ma60, ma100, dif, params } = ctx;
   const closes = adjBars.map((bar) => bar.close);
   const last = adjBars[adjBars.length - 1];
   if (!last) return [];
@@ -244,7 +244,6 @@ function limitUpEntryNote(ctx: RuleContext): string {
 function buildExitPlan(ctx: RuleContext, signals: readonly SignalHit[]): ExitPlan {
   const { adjBars, ma10, ma20, ma60, params, bars } = ctx;
   const limitUpNote = limitUpEntryNote(ctx);
-  const last = adjBars[adjBars.length - 1] as DailyBar;
   const lastFactor = (bars[bars.length - 1] as DailyBar).adjFactor;
   const entry = (bars[bars.length - 1] as DailyBar).close;
 
