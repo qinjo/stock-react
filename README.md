@@ -206,6 +206,7 @@ cd frontend && npm test   # 116 项：搜索补全、快照卡、图表数据转
 - 全市场数据层决策：[`docs/adr/0004-market-wide-screener-data.md`](docs/adr/0004-market-wide-screener-data.md)
 - 规则来源（书内原文 + 行号）：[`_research/短线操盘技法-选股规则提炼.md`](_research/短线操盘技法-选股规则提炼.md)
 - 历史回放验收记录：[`docs/verification-replay-2026-09-29.md`](docs/verification-replay-2026-09-29.md)
+- 规则溯源抽查：[`docs/verification-book-citations.md`](docs/verification-book-citations.md)（书 → 提炼笔记 → 代码）
 - 调研笔记：[`_research/开源LLM金融分析项目调研笔记.md`](_research/开源LLM金融分析项目调研笔记.md)、[`free-stock-api-research.md`](free-stock-api-research.md)
 
 ## 范围之外（当前版本）
