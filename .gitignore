@@ -3,6 +3,8 @@ _research/*/
 !_research/*.md
 # 电子书原文件（第三方版权内容，只作本地研究素材，不入版本库）
 _research/*.azw3
+# 电子书解包产物：含全书文字，绝不入库
+_research/extracted/
 
 # 依赖
 node_modules/
