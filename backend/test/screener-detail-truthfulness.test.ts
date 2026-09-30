@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CRITERIA, paramsFor } from "../src/screener/params.js";
-import { RULES, buildContext } from "../src/screener/rules.js";
-import { countCrossings, countLimitUp, limitUpPrice, trendR2 } from "../src/screener/structure.js";
+import { RULES, barsSinceMa100Cross, buildContext } from "../src/screener/rules.js";
+import { countCrossings, countLimitUp, limitUpPrice, officialChangePercent, trendR2 } from "../src/screener/structure.js";
+import { screenUniverse } from "../src/screener/engine.js";
 import type { RuleContext } from "../src/screener/rules.js";
 import { goodSecurity } from "./helpers/screener-fixtures.js";
 
@@ -242,5 +243,82 @@ describe("X-highLimitUp 的「高位」是刻意细化过的：前一根也在 M
     );
     expect(outcome.ok).toBe(true);
     expect(outcome.detail).toContain("收复");
+  });
+});
+
+/* --------- 候选卡片上的 metrics == 规则层实际用于判断的值 --------- */
+
+/**
+ * `metrics` 由 `metricsOf` 组装、判据由 `rules` 各自计算——**两处算同一个量**。
+ * 它们目前共用同一个 `RuleContext`（结构上一致），但一次"顺手在这里重算一下"的改动
+ * 就会让界面上的画像与筛选依据不符，而且不会报错。
+ *
+ * 两者都在同一个 verdict 上（`metrics` 与 `hits`），所以可以直接对起来。
+ */
+describe("metrics 与规则层用于判断的值一致", () => {
+  function verdictOf() {
+    const outcome = screenUniverse([goodSecurity()], { ...DEFAULT_CRITERIA, strictness: "loose" });
+    expect(outcome.shortlisted).toHaveLength(1);
+    return outcome.shortlisted[0]!;
+  }
+
+  const hitOf = (verdict: ReturnType<typeof verdictOf>, id: string) => {
+    const hit = verdict.hits.find((h) => h.id === id);
+    expect(hit, `未找到规则 ${id}`).toBeDefined();
+    return hit!;
+  };
+
+  it("MA100：metrics 里的值与 U-ma100 报出、比较的是同一个", () => {
+    const verdict = verdictOf();
+    const hit = hitOf(verdict, "U-ma100");
+    const [reportedClose, reportedMa, reportedDeviation] = numbersIn(hit.outcome.detail, 3);
+
+    expect(verdict.metrics.ma100).toBeCloseTo(reportedMa, 2);
+    expect(verdict.metrics.ma100Deviation).not.toBeNull();
+    expect(verdict.metrics.ma100Deviation! * 100).toBeCloseTo(reportedDeviation, 1);
+    // 报出的偏离度必须与报出的收盘/MA100 自洽
+    expect(reportedDeviation).toBeCloseTo(((reportedClose - reportedMa) / reportedMa) * 100, 0);
+  });
+
+  it("成交额：metrics 里的值与 U-turnover 报出、比较的是同一个", () => {
+    const verdict = verdictOf();
+    const hit = hitOf(verdict, "U-turnover");
+    const [reportedWan] = numbersIn(hit.outcome.detail, 1);
+    expect(verdict.metrics.turnoverAmount).not.toBeNull();
+    // 规则以"万"为单位报出
+    expect(verdict.metrics.turnoverAmount! / 1e4).toBeCloseTo(reportedWan, 0);
+  });
+
+  it("流通市值：metrics 里的值与 U-marketCap 报出、比较的是同一个", () => {
+    const verdict = verdictOf();
+    const hit = hitOf(verdict, "U-marketCap");
+    const [reportedYi] = numbersIn(hit.outcome.detail, 1);
+    expect(verdict.metrics.floatMarketCap).not.toBeNull();
+    expect(verdict.metrics.floatMarketCap! / 1e8).toBeCloseTo(reportedYi, 2);
+  });
+
+  it("涨跌幅：metrics 里的值等于按交易所口径昨收独立复算的结果", () => {
+    const verdict = verdictOf();
+    const base = goodSecurity();
+    const bars = base.bars;
+    const expected = officialChangePercent(
+      bars[bars.length - 1],
+      bars[bars.length - 2],
+    );
+    expect(verdict.metrics.changePercent).toBeCloseTo(expected!, 6);
+  });
+
+  it("上穿时点：metrics 里的值与 U-ma100 所依据的是同一段均线序列", () => {
+    const outcome = screenUniverse([goodSecurity()], { ...DEFAULT_CRITERIA, strictness: "loose" });
+    const verdict = outcome.shortlisted[0]!;
+    const ctx = buildContext(goodSecurity(), paramsFor("loose"), {
+      ...DEFAULT_CRITERIA,
+      strictness: "loose",
+    });
+    const expected = barsSinceMa100Cross(
+      ctx.adjBars.map((b) => b.close),
+      ctx.ma100,
+    );
+    expect(verdict.metrics.barsSinceMa100Cross).toBe(expected);
   });
 });
