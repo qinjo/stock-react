@@ -15,7 +15,8 @@
     "backfill:valuation": "tsx scripts/backfill-valuation.ts",
     "replay:screen": "tsx scripts/replay-screen.ts",
     "verify:invariants": "tsx scripts/verify-invariants.ts",
-    "verify": "npm run verify:kline && npm run verify:invariants"
+    "verify": "npm run verify:kline && npm run verify:invariants",
+    "verify:llm": "tsx --env-file-if-exists=.env scripts/verify-llm-paths.ts"
   },
   "dependencies": {
     "fastify": "^5.12.1",

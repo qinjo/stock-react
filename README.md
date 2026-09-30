@@ -99,6 +99,8 @@ npm run bootstrap:kline     # 下载归档并建库，约 70 秒（566 MB 下载
 npm run verify              # 对账（两条都跑，建议每次 update:kline 之后跑一次）
 #   ├─ verify:kline       VWAP 恒等式 + 与外部行情的收盘价交叉校验
 #   └─ verify:invariants  数据不变式：因子/OHLC/日历/唯一性/标的标记/meta 记忆化/估值覆盖
+# 以下这条会真的调模型（不进测试套件，因为测试铁律是"永不触网"）
+npm run verify:llm          # 验真实模型的输出能否被我们的解析器接住
 npm run screen:preview      # 在命令行看三档漏斗与候选样本
 ```
 
