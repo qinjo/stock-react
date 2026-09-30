@@ -129,6 +129,7 @@ export const DEFAULT_CRITERIA: ScreenerCriteria = {
   mode: "trend",
   strictness: "standard",
   includeBeijing: false,
+  ignoreMarketGate: false,
 };
 
 /**
