@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import type { MarketStore } from "./store.js";
 import { fromDateKey } from "./qlib.js";
 
@@ -201,9 +200,4 @@ export function crossCheckValuationClose(
     }
   }
   return result;
-}
-
-/** 供 CLI 判断归档是否存在，避免把一个不存在的库当成空库。 */
-export function storeExists(path: string): boolean {
-  return existsSync(path);
 }
