@@ -253,7 +253,8 @@ function ResultView({
 
         <p className="mt-2 text-xs text-slate-500">
           漏斗：全市场 {funnel.universe} → 排除池 {funnel.afterExclusions} → 硬门槛{" "}
-          {funnel.afterHardFilters} → 基础池 {funnel.shortlisted}
+          {funnel.afterHardFilters} → 基础池 {funnel.shortlisted} → 有信号{" "}
+          <span className="font-medium text-slate-700">{funnel.signalEligible}</span>
           {data.fromCache && <span className="ml-2 text-slate-400">· 来自当日缓存</span>}
         </p>
 
@@ -310,6 +311,15 @@ function ResultView({
   );
 }
 
+/** 档序 → 中文名，与后端 TIER_OF 一一对应。 */
+const TIER_LABELS: Record<number, string> = {
+  1: "底背离双突破",
+  2: "低位 123",
+  3: "三档入场",
+  4: "MA20 上穿",
+  5: "阻力突破 / 支撑回踩",
+};
+
 function CandidateCard({
   candidate,
   onPick,
@@ -317,13 +327,14 @@ function CandidateCard({
   candidate: ScreenCandidate;
   onPick: (target: { code: string; name: string }) => void;
 }) {
-  const { metrics } = candidate;
+  const { metrics, exit } = candidate;
   const since = metrics.barsSinceMa100Cross;
+  const strongest = candidate.signals.signals[0] ?? null;
 
   return (
     <li className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex items-baseline gap-2">
+        <div className="flex flex-wrap items-baseline gap-2">
           <button
             type="button"
             onClick={() => onPick({ code: candidate.code, name: candidate.name ?? candidate.code })}
@@ -332,6 +343,11 @@ function CandidateCard({
             {candidate.name ?? candidate.code}
           </button>
           <span className="text-xs text-slate-400">{candidate.code}</span>
+          {candidate.signalTier !== null && (
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
+              档{candidate.signalTier} · {TIER_LABELS[candidate.signalTier] ?? "信号"}
+            </span>
+          )}
         </div>
         <div className="flex items-baseline gap-3 text-sm">
           <span className="font-medium text-slate-900">{price(candidate.price)}</span>
@@ -340,6 +356,52 @@ function CandidateCard({
           </span>
         </div>
       </div>
+
+      {strongest && (
+        <p className="mt-2 text-xs text-slate-600">
+          <span className="text-slate-400">信号：</span>
+          <span className="font-medium text-slate-800">{strongest.label}</span>
+          <span className="ml-1 text-slate-400">（书 {strongest.bookRef}）</span>
+          <span className="ml-1 text-slate-500">{strongest.detail}</span>
+        </p>
+      )}
+
+      {/*
+        离场计划：源书的逻辑是"跟随趋势直到结构被破坏"，而不是"到价卖出"，
+        所以这里给的是止损位、失效条件与分批止盈，**不给目标价**。
+      */}
+      <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+        <p className="text-xs text-slate-700">
+          <span className="text-slate-400">入场 </span>
+          <span className="font-medium">{price(exit.entry)}</span>
+          <span className="mx-1.5 text-slate-300">|</span>
+          <span className="text-slate-400">止损 </span>
+          <span className="font-medium text-emerald-700">{price(exit.stop)}</span>
+          <span className="ml-1 text-slate-500">
+            （{exit.stopBasisLabel}，空间 {(exit.stopSpace * 100).toFixed(1)}%）
+          </span>
+        </p>
+        <p className="mt-1 text-xs text-slate-600">
+          <span className="text-slate-400">失效：</span>
+          {exit.invalidation}
+        </p>
+        <p className="mt-0.5 text-xs text-slate-600">
+          <span className="text-slate-400">止盈：</span>
+          {exit.scaleOut}
+        </p>
+      </div>
+
+      {candidate.resistance.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs">
+          {candidate.resistance.map((item) => (
+            <li key={item.kind}>
+              <span className="text-slate-400">参考压力位 </span>
+              <span className="font-medium text-slate-800">{price(item.price)}</span>
+              <span className="ml-1 text-slate-400">{item.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <div className="flex gap-1">

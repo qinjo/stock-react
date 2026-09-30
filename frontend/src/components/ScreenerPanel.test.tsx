@@ -38,6 +38,36 @@ const candidate = {
     },
   ],
   deductions: ["流通市值：流通市值未知（待行情快照），闸门 20.00亿–80.00亿 未生效"],
+  signals: {
+    signals: [
+      {
+        id: "S3" as const,
+        label: "低位 123 突破高点 2",
+        tier: 2,
+        detail: "低点1 1120.00 → 高点2 1180.00 → 低点3 1140.00，已突破",
+        bookRef: "L681",
+      },
+    ],
+    bestTier: 2,
+  },
+  signalTier: 2,
+  exit: {
+    entry: 1235.58,
+    stop: 1168.2,
+    stopBasis: "low123" as const,
+    stopBasisLabel: "123 结构低点 3（书 L689）",
+    stopSpace: 0.0545,
+    invalidation: "跌破低点 3（1168.20）即结构破坏，按书 L707 破 3 减半、破低点 1 清仓",
+    scaleOut: "冲高分批卖出；涨停后冲高注意减仓（书 L1998 / L1521）",
+    bookRef: "L689",
+  },
+  resistance: [
+    {
+      kind: "prior-high" as const,
+      price: 1258.0,
+      detail: "前 60 根高点 1258.00（可能受阻的位置，不是涨幅预测）",
+    },
+  ],
 };
 
 const success: ScreenResponse = {
@@ -51,7 +81,7 @@ const success: ScreenResponse = {
     ignoreMarketGate: false,
     refresh: false,
   },
-  funnel: { universe: 6030, afterExclusions: 5202, afterHardFilters: 5034, shortlisted: 824 },
+  funnel: { universe: 6030, afterExclusions: 5006, afterHardFilters: 4855, shortlisted: 337, signalEligible: 24 },
   candidateTotal: 824,
   candidates: [candidate],
   inactiveRules: ["E-st", "U-marketCap"],
@@ -153,9 +183,10 @@ describe("ScreenerPanel 结果呈现", () => {
 
     expect(await screen.findByText("贵州茅台")).toBeInTheDocument();
     expect(screen.getByText("600519")).toBeInTheDocument();
-    expect(screen.getByText("1235.58")).toBeInTheDocument();
+    // 现价与离场计划的「入场」是同一个价，会出现两处
+    expect(screen.getAllByText("1235.58").length).toBeGreaterThan(0);
     expect(screen.getByText(/数据截至 2026-09-29/)).toBeInTheDocument();
-    expect(screen.getByText(/全市场 6030 → 排除池 5202 → 硬门槛 5034 → 基础池 824/)).toBeInTheDocument();
+    expect(screen.getByText(/全市场 6030 → 排除池 5006 → 硬门槛 4855 → 基础池 337 → 有信号/)).toBeInTheDocument();
     expect(screen.getByText(/E-st、U-marketCap/)).toBeInTheDocument();
   });
 
@@ -316,5 +347,54 @@ describe("ScreenerPanel 错误分流", () => {
 
     expect(await screen.findByText("筛选请求失败")).toBeInTheDocument();
     expect(screen.getByText(/strictness 只能是/)).toBeInTheDocument();
+  });
+});
+
+/* ---------------- 离场条件与参考压力位展示（#18） ---------------- */
+
+describe("离场条件与参考压力位展示（#18）", () => {
+  async function renderResult() {
+    stubFetch({ ok: true, body: success });
+    const view = render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+    await screen.findByText("贵州茅台");
+    return view;
+  }
+
+  it("标出信号档序与命中的信号（供判断买点强弱）", async () => {
+    await renderResult();
+    expect(screen.getByText("档2 · 低位 123")).toBeInTheDocument();
+    expect(screen.getByText("低位 123 突破高点 2")).toBeInTheDocument();
+    expect(screen.getByText(/书 L681/)).toBeInTheDocument();
+  });
+
+  it("显示止损位与它的依据（结构低点 / 均线配对 / 固定比例）", async () => {
+    await renderResult();
+    expect(screen.getByText("1168.20")).toBeInTheDocument(); // 止损位
+    expect(screen.getByText(/123 结构低点 3（书 L689）/)).toBeInTheDocument();
+    expect(screen.getByText(/空间 5\.5%/)).toBeInTheDocument();
+  });
+
+  it("显示信号失效条件与分批止盈规则", async () => {
+    await renderResult();
+    expect(screen.getByText(/跌破低点 3（1168\.20）即结构破坏/)).toBeInTheDocument();
+    expect(screen.getByText(/冲高分批卖出/)).toBeInTheDocument();
+  });
+
+  it("显示参考压力位，并明确它是「可能受阻」而非涨幅预测", async () => {
+    await renderResult();
+    expect(screen.getByText("1258.00")).toBeInTheDocument();
+    expect(screen.getByText(/可能受阻的位置，不是涨幅预测/)).toBeInTheDocument();
+  });
+
+  it("全站文案不出现「目标价」", async () => {
+    const { container } = await renderResult();
+    expect(container.textContent ?? "").not.toContain("目标价");
+  });
+
+  it("漏斗展示到「有信号」这一档（基础池 337 → 有信号 24）", async () => {
+    await renderResult();
+    expect(screen.getByText(/基础池 337/)).toBeInTheDocument();
+    expect(screen.getByText("24")).toBeInTheDocument();
   });
 });

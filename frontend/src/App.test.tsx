@@ -385,7 +385,7 @@ const screenBody = {
     ignoreMarketGate: false,
     refresh: false,
   },
-  funnel: { universe: 6030, afterExclusions: 5202, afterHardFilters: 5034, shortlisted: 824 },
+  funnel: { universe: 6030, afterExclusions: 5006, afterHardFilters: 4855, shortlisted: 337, signalEligible: 24 },
   candidateTotal: 1,
   candidates: [
     {
@@ -405,6 +405,36 @@ const screenBody = {
       },
       ruleHits: [],
       deductions: [],
+        signals: {
+          signals: [
+            {
+              id: "S3" as const,
+              label: "低位 123 突破高点 2",
+              tier: 2,
+              detail: "低点1 1120.00 → 高点2 1180.00 → 低点3 1140.00，已突破",
+              bookRef: "L681",
+            },
+          ],
+          bestTier: 2,
+        },
+        signalTier: 2,
+        exit: {
+          entry: 1235.58,
+          stop: 1168.2,
+          stopBasis: "low123" as const,
+          stopBasisLabel: "123 结构低点 3（书 L689）",
+          stopSpace: 0.0545,
+          invalidation: "跌破低点 3（1168.20）即结构破坏，按书 L707 破 3 减半、破低点 1 清仓",
+          scaleOut: "冲高分批卖出；涨停后冲高注意减仓（书 L1998 / L1521）",
+          bookRef: "L689",
+        },
+        resistance: [
+          {
+            kind: "prior-high" as const,
+            price: 1258.0,
+            detail: "前 60 根高点 1258.00（可能受阻的位置，不是涨幅预测）",
+          },
+        ],
     },
   ],
   inactiveRules: [],

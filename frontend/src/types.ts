@@ -273,6 +273,50 @@ export type ScreenMetrics = {
   turnoverAmount: number | null;
 };
 
+export type SignalId = "S1" | "S2" | "S3" | "S5" | "S13";
+
+export type SignalHit = {
+  id: SignalId;
+  label: string;
+  /** 档序：数字越小越强 */
+  tier: number;
+  detail: string;
+  /** 书内定位，如 L681 */
+  bookRef: string;
+};
+
+export type SignalSet = {
+  signals: SignalHit[];
+  /** 最强信号的档序；无信号为 null */
+  bestTier: number | null;
+};
+
+export type StopBasis = "low123" | "ma-pairing" | "fixed-ratio";
+
+/** 离场计划。**刻意没有"目标价"**：源书的逻辑是跟随趋势直到结构破坏，而不是到价卖出。 */
+export type ExitPlan = {
+  /** 入场参考价（最新不复权收盘） */
+  entry: number;
+  /** 止损位（真实成交价口径） */
+  stop: number;
+  stopBasis: StopBasis;
+  stopBasisLabel: string;
+  /** 止损空间占入场价比例 */
+  stopSpace: number;
+  /** 信号失效条件 */
+  invalidation: string;
+  /** 分批止盈规则 */
+  scaleOut: string;
+  bookRef: string;
+};
+
+/** 参考压力位：可能受阻的位置，不是涨幅预测。 */
+export type ReferenceResistance = {
+  kind: "prior-high" | "range-high";
+  price: number;
+  detail: string;
+};
+
 export type ScreenCandidate = {
   code: string;
   /** bootstrap 阶段为空，待行情快照回填 */
@@ -283,6 +327,12 @@ export type ScreenCandidate = {
   ruleHits: ScreenRuleHit[];
   /** 扣分项 / 未判定项 */
   deductions: string[];
+  /** 命中的入场信号（按档序升序） */
+  signals: SignalSet;
+  /** 最强信号的档序，越小越强 */
+  signalTier: number | null;
+  exit: ExitPlan;
+  resistance: ReferenceResistance[];
 };
 
 export type ScreenFunnel = {
@@ -290,6 +340,8 @@ export type ScreenFunnel = {
   afterExclusions: number;
   afterHardFilters: number;
   shortlisted: number;
+  /** 通过信号层与止损空间闸门的数量 */
+  signalEligible: number;
 };
 
 export type ScreenMode = "trend" | "event";
