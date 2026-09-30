@@ -269,3 +269,109 @@ describe("结果内容", () => {
     expect(result.kind).toBe("empty");
   });
 });
+
+/* ------------- 缓存等价性：命中与未命中必须给出同一份答案 ------------- */
+
+/**
+ * 缓存键此前只被"键里含什么"的静态检查覆盖过。**一个会返回不同答案的缓存
+ * 是最隐蔽的那类 bug**：它不报错、不变慢，只是让用户看到一份旧世界的结果。
+ *
+ * 所以这里验的是运行期性质：同一份数据下，命中与未命中必须逐字段相同；
+ * 而进键的任何一个输入变了，都必须重算。
+ */
+describe("缓存等价性", () => {
+  const makeCache = () =>
+    new PromptCache<{ response: import("../src/screener/response.js").ScreenResponse }>(60_000);
+
+  /**
+   * 结果里除了候选本身，还有"这次是不是命中缓存"与"这次有没有跑增量"两个元信息
+   * —— 它们在**编排结果**上（`fromCache` / `increment`），不在 `response` 里。
+   * 比对候选内容时只取 `response`。
+   */
+  const body = (r: { response: import("../src/screener/response.js").ScreenResponse }) => r.response;
+
+  it("同一参数跑两遍：第二次命中，且两者除元信息外逐字段相同", async () => {
+    const cache = makeCache();
+    const first = await run({ cache });
+    const second = await run({ cache });
+
+    expect(first.kind).toBe("ok");
+    expect(second.kind).toBe("ok");
+    if (first.kind !== "ok" || second.kind !== "ok") return;
+
+    expect(first.fromCache).toBe(false);
+    expect(second.fromCache).toBe(true);
+    expect(body(second)).toEqual(body(first));
+  });
+
+  it("绕过缓存重算，与命中缓存给出同一份候选集合", async () => {
+    const cache = makeCache();
+    const cached = await run({ cache });
+    // refresh=true 会走增量分支；假增量不改数据，结论就应当一样
+    const refreshed = await run({ cache }, true);
+
+    expect(cached.kind).toBe("ok");
+    expect(refreshed.kind).toBe("ok");
+    if (cached.kind !== "ok" || refreshed.kind !== "ok") return;
+
+    // 两边**请求参数本就不同**（一边 refresh=true），因此排除 params；
+    // 其余字段（候选、漏斗、大盘门、降级标记）必须逐字段相同。
+    const strip = (r: { response: import("../src/screener/response.js").ScreenResponse }) => {
+      const { params: _params, ...rest } = r.response as unknown as Record<string, unknown>;
+      return rest;
+    };
+    expect(strip(refreshed)).toEqual(strip(cached));
+  });
+
+  it("进键的每个输入变了都必须重算，而不是端出上一份结果", async () => {
+    const cache = makeCache();
+    await run({ cache });
+
+    // 逐个改一个进键的输入：都应未命中
+    const variants: Array<Partial<ScreenRequestParams>> = [
+      { mode: "event" },
+      { strictness: "loose" },
+      { boards: ["main"] },
+      { ignoreMarketGate: true },
+    ];
+
+    for (const variant of variants) {
+      const outcome = await runScreen(
+        {
+          criteria: {
+            mode: variant.mode ?? CRITERIA.mode,
+            strictness: variant.strictness ?? CRITERIA.strictness,
+            includeBeijing: false,
+            ignoreMarketGate: variant.ignoreMarketGate ?? false,
+          },
+          params: { ...PARAMS, ...variant },
+          limit: 10,
+          refresh: false,
+        },
+        deps({ cache }),
+      );
+      expect(outcome.kind, JSON.stringify(variant)).toBe("ok");
+      if (outcome.kind !== "ok") continue;
+      // 改的是同一只票、同一份数据，所以"命中"只可能来自键太窄
+      expect(outcome.fromCache, `改 ${JSON.stringify(variant)} 后不该命中`).toBe(false);
+    }
+  });
+
+  it("limit 不同不得互相命中（响应是按 limit 截断的）", async () => {
+    const cache = makeCache();
+    const one = await runScreen(
+      { criteria: CRITERIA, params: PARAMS, limit: 1, refresh: false },
+      deps({ cache }),
+    );
+    const many = await runScreen(
+      { criteria: CRITERIA, params: PARAMS, limit: 10, refresh: false },
+      deps({ cache }),
+    );
+
+    expect(one.kind).toBe("ok");
+    expect(many.kind).toBe("ok");
+    if (one.kind !== "ok" || many.kind !== "ok") return;
+    expect(one.response.candidates.length).toBeLessThanOrEqual(1);
+    expect(many.fromCache).toBe(false);
+  });
+});
