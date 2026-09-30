@@ -97,6 +97,7 @@ npm run dev                 # http://localhost:5173
 cd backend
 npm run bootstrap:kline     # 下载归档并建库，约 70 秒（566 MB 下载）
 npm run verify:kline        # 对账：VWAP 恒等式 + 与外部行情的收盘价交叉校验
+npm run verify:invariants   # 数据不变式：因子/OHLC/日历/唯一性/标的标记
 npm run screen:preview      # 在命令行看三档漏斗与候选样本
 ```
 

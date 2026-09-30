@@ -394,5 +394,9 @@ export async function runIncrement(
     store.setMeta("last_increment_snapshot_date", String(snapshotDate));
   }
 
+  // 日历从日线补齐：指数只抓了 200 根，单靠它建日历会漏掉绝大部分交易日
+  const filled = store.fillCalendarFromBars();
+  if (filled > 0) stats.calendarDates += filled;
+
   return stats;
 }

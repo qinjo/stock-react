@@ -114,9 +114,11 @@ describe("ingestArchive 端到端", () => {
       calendarFirst: "2019-01-02",
       latestDate: LATEST,
       tradingDays: 5,
-      instruments: 5,
-      liveInstruments: 4, // 688981 的截止日早于最新交易日
-      instrumentsWritten: 2, // 600519 个股 + sh000300 指数
+      // 清单 5 只，其中 sh000300 是指数——不入 instruments（日线走 index_bars），
+      // 否则会虚高漏斗第一档的"全市场"计数
+      instruments: 4,
+      liveInstruments: 3, // 688981 的截止日早于最新交易日
+      instrumentsWritten: 2, // 归档里流式写出的条数，与是否入表无关
       unknownDirs: 1, // sz999999 不在清单里
       incompleteInstruments: 0,
       barCount: 3, // 只有 2026 年的 3 根进入 bars
@@ -151,9 +153,12 @@ describe("ingestArchive 端到端", () => {
     expect(store.readBars("000300")).toHaveLength(0);
   });
 
-  it("标的存在性标记与基础信息入表", async () => {
+  it("标的存在性标记与基础信息入表（指数不入个股表）", async () => {
     await ingestArchive(store, tarPath, 6);
-    expect(store.countInstruments()).toBe(5);
+    // 清单 5 只，其中 sh000300 是指数——不入 instruments，
+    // 因此表里是 4 只个股。指数的日线另有 index_bars 表。
+    expect(store.countInstruments()).toBe(4);
+    expect(store.readInstrument("000300")).toBeNull();
     expect(store.readInstrument("600519")).toMatchObject({
       market: "sh",
       board: "main",

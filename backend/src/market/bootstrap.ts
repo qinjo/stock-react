@@ -301,6 +301,10 @@ export async function ingestFeatures(
   if (open) store.commit();
   // 收尾时仍留在手上的，就是字段不齐、永远凑不齐 7 条的标的
   stats.incompleteInstruments = inFlight.size;
+  // 日历从日线补齐：归档里的日历只覆盖指数区间，个股日线才是权威来源。
+  // 补了多少不在这里回报（增量路径的 stats 里回报），这里只保证结果正确。
+  store.fillCalendarFromBars();
+
   return stats;
 }
 
@@ -317,7 +321,13 @@ export async function ingestArchive(
   const meta = buildInstrumentRows(prepared.instruments, prepared.latestDate);
 
   const byCode = new Map<string, InstrumentRow>();
-  for (const row of meta.values()) if (!byCode.has(row.code)) byCode.set(row.code, row);
+  for (const row of meta.values()) {
+    // 指数不是可交易的个股：留在 instruments 里会虚高漏斗第一档的"全市场"计数
+    // （它们本来就被板块开关挡在候选之外，所以只影响那个数，不影响结果）。
+    // 指数的日线走独立的 index_bars 表。
+    if (row.board === "index") continue;
+    if (!byCode.has(row.code)) byCode.set(row.code, row);
+  }
   const allRows = [...byCode.values()];
   for (let i = 0; i < allRows.length; i += COMMIT_EVERY) {
     const chunk = allRows.slice(i, i + COMMIT_EVERY);

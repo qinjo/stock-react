@@ -244,6 +244,29 @@ export class MarketStore {
    * 写入交易日历（幂等）。日历来自指数日线，因此是**真实交易日**，
    * 不需要在代码里猜周末与节假日。
    */
+  /**
+   * 用日线自身的日期补齐交易日历。
+   *
+   * 日历此前只从**指数日线**建立，而指数只抓了 200 根 → 日历只有约 400 天，
+   * 而日线有 1400 多个交易日。后果不只是"少记一笔"：
+   * **估值回填按日历遍历交易日，于是六年只会跑到 400 天**——静默地只做了一部分。
+   * 个股日线是"哪些日子真的在交易"的权威来源，用它补齐。
+   *
+   * @returns 新补进日历的日期数
+   */
+  fillCalendarFromBars(): number {
+    const before = this.prepare("SELECT COUNT(*) AS n FROM trading_calendar").get() as
+      | RawBar
+      | undefined;
+    this.db.exec(
+      "INSERT OR IGNORE INTO trading_calendar (date) SELECT DISTINCT date FROM bars",
+    );
+    const after = this.prepare("SELECT COUNT(*) AS n FROM trading_calendar").get() as
+      | RawBar
+      | undefined;
+    return (after?.n ?? 0) - (before?.n ?? 0);
+  }
+
   insertCalendarDates(dates: readonly number[]): void {
     const stmt = this.prepare("INSERT OR IGNORE INTO trading_calendar (date) VALUES (?)");
     for (const date of dates) stmt.run(date);
