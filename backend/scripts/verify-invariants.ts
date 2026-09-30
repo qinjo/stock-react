@@ -68,6 +68,30 @@ const CHECKS: Check[] = [
     why: "标记为在交易、最后一条日线却在 20 个交易日之前，说明增量长期漏了它（或退市判定错了）",
   },
   {
+    // `latest_trade_date` 是为性能做的**记忆化**值（见 store.ts 的 latestDateMemo）：
+    // 它一旦与真实数据脱节，`latestTradeDate()` 就会说谎，
+    // 而整个筛选器会以为自己在另一天——用错日期的结果看起来照样正常。
+    name: "meta.latest_trade_date 与日线真实最新日一致",
+    sql: `SELECT COUNT(*) AS n FROM meta
+          WHERE key = 'latest_trade_date'
+            AND value <> (SELECT CAST(MAX(date) AS TEXT) FROM bars)`,
+    why: "记忆化值与真实数据脱节会让筛选器在错误的交易日上工作",
+  },
+  {
+    name: "估值表的日期都在交易日历内",
+    sql: `SELECT COUNT(*) AS n FROM (
+            SELECT DISTINCT date FROM valuation
+            EXCEPT SELECT date FROM trading_calendar)`,
+    why: "估值落在非交易日，说明日期解析错了（列序或格式）",
+  },
+  {
+    name: "估值表的日期都有对应的个股日线",
+    sql: `SELECT COUNT(*) AS n FROM (
+            SELECT DISTINCT date FROM valuation
+            EXCEPT SELECT DISTINCT date FROM bars)`,
+    why: "有估值却没有日线，说明两个源覆盖的交易日不一致",
+  },
+  {
     name: "股票池里不应混入指数",
     sql: "SELECT COUNT(*) AS n FROM instruments WHERE board = 'index'",
     why: `指数不是可交易的个股。它们目前被板块开关挡在候选之外，所以不影响结果，

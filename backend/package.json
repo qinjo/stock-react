@@ -14,7 +14,8 @@
     "update:kline": "tsx scripts/update-kline.ts",
     "backfill:valuation": "tsx scripts/backfill-valuation.ts",
     "replay:screen": "tsx scripts/replay-screen.ts",
-    "verify:invariants": "tsx scripts/verify-invariants.ts"
+    "verify:invariants": "tsx scripts/verify-invariants.ts",
+    "verify": "npm run verify:kline && npm run verify:invariants"
   },
   "dependencies": {
     "fastify": "^5.12.1",

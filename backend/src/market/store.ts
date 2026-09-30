@@ -1,4 +1,5 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { fromDateKey } from "./qlib.js";
 import type { Board, Market } from "./qlib.js";
 import type { ValuationRow } from "./valuation.js";
 
@@ -264,6 +265,12 @@ export class MarketStore {
     const after = this.prepare("SELECT COUNT(*) AS n FROM trading_calendar").get() as
       | RawBar
       | undefined;
+    // `calendar_first` 会与实际不符：它在 bootstrap 时写的是**归档**日历的起点
+    // （2000-01-04），而实际只保留最近几年。让 meta 跟着真实数据走。
+    const first = this.prepare("SELECT MIN(date) AS d FROM trading_calendar").get() as
+      | RawBar
+      | undefined;
+    if (first?.d) this.setMeta("calendar_first", fromDateKey(first.d));
     return (after?.n ?? 0) - (before?.n ?? 0);
   }
 
