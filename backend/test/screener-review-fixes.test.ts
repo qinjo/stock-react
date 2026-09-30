@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CRITERIA, paramsFor } from "../src/screener/params.js";
-import { buildContext, RULES } from "../src/screener/rules.js";
+import { RULES, buildContext, evaluateRules } from "../src/screener/rules.js";
 import { evaluateTrendSignals } from "../src/screener/signals.js";
 import { detectUpwardGap, officialChangePercent } from "../src/screener/structure.js";
 import { rankShortlist } from "../src/screener/response.js";
@@ -187,5 +187,47 @@ describe("officialChangePercent：按交易所口径的昨收", () => {
     expect(officialChangePercent(undefined, day(10, 1))).toBeNull();
     expect(officialChangePercent(day(11, 1, 20260930), undefined)).toBeNull();
     expect(officialChangePercent(day(11, 1, 20260930), day(0, 1))).toBeNull();
+  });
+});
+
+/* ------ E-st：名称缺失时不按违规处理，但必须披露（真实库里有这类标的） ------ */
+
+/**
+ * 真实库里确实存在"在市、非北交所、名称为 NULL"的标的（603183 / 002667 / 002813）。
+ * 名称来自每日快照，快照日停牌就没补上——而这三只恰好也因"最后一根不在最新交易日"
+ * 被 `E-suspended-today` 挡掉，所以没有实际风险。
+ *
+ * 但**残余情形**是"名称为空且当天在交易"：那时 ST 剔除对这一只是失效的。
+ * 这条测试钉住的是当时的处置原则——**缺数据不等于违规，但必须如实披露**，
+ * 让它出现在 `unknownRules`（界面据此显示"未判定"），而不是静默放过。
+ */
+describe("E-st：名称缺失时标为未判定，而不是当成违规或静默放过", () => {
+  it("名称为 NULL → 标为未判定（不 fail、也不假装判定过）", () => {
+    const security = goodSecurity({ name: null });
+    const result = evaluateRules(
+      buildContext(security, paramsFor("loose"), { ...DEFAULT_CRITERIA, strictness: "loose" }),
+    );
+    const rule = result.hits.find((h) => h.id === "E-st");
+    expect(rule?.outcome.ok).toBe(true);
+    expect(rule?.outcome.unknown).toBe(true);
+    expect(rule?.outcome.detail).toContain("名称为空");
+  });
+
+  it("命中 ST / 退的名义标的 → 如实剔除", () => {
+    const security = goodSecurity({ name: "ST测试" });
+    const result = evaluateRules(
+      buildContext(security, paramsFor("loose"), { ...DEFAULT_CRITERIA, strictness: "loose" }),
+    );
+    const rule = result.hits.find((h) => h.id === "E-st");
+    expect(rule?.outcome.ok).toBe(false);
+  });
+
+  it("未判定的规则会进入 unknownRules，供界面显示「未判定」", () => {
+    const outcome = screenUniverse([goodSecurity({ name: null })], {
+      ...DEFAULT_CRITERIA,
+      strictness: "loose",
+    });
+    const verdict = outcome.shortlisted[0];
+    expect(verdict?.unknownRules).toContain("E-st");
   });
 });
