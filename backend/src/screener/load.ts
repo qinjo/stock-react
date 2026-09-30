@@ -27,6 +27,13 @@ export function* loadUniverseFromStore(
   for (const row of store.listInstruments()) {
     if (options.codeFilter && !options.codeFilter(row)) continue;
     const bars = asOf === undefined ? store.readBars(row.code, barsLimit) : store.readBarsUpTo(row.code, asOf, barsLimit);
+    // 库内没有日线的标的（退市、长期停牌、上市但未取到数据）在这里跳过：
+    // 规则层会读 `bars.at(-1)`，空序列进去会崩。
+    //
+    // **已知口径偏差**：因此漏斗第一档 `universe` 数的是"有日线的标的"，
+    // 比 `instruments` 表的总数少（实测 5556 vs 6159）。差额全部是退市/无数据标的，
+    // 它们本来也不该进候选；但第一档的数字确实不等于全市场标的数。
+    // 要修得先把规则层的空序列路径处理干净，见 #26 的验收记录。
     if (bars.length === 0) continue;
     const lastBarDate = (bars[bars.length - 1] as { date: number }).date;
     yield {

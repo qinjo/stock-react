@@ -137,7 +137,12 @@ export default function ScreenerPanel({ onPick }: Props) {
                   type="button"
                   title={item.hint}
                   aria-pressed={mode === item.value}
-                  onClick={() => setMode(item.value)}
+                  onClick={() => {
+                    // 旧结果必须立即作废：档位标签是按模式渲染的，
+                    // 留着旧结果会让"档2 低位123"被标成"档2 涨停B形态"
+                    setMode(item.value);
+                    setState({ kind: "idle" });
+                  }}
                   className={`rounded border px-3 py-1 text-sm ${
                     mode === item.value
                       ? "border-slate-800 bg-slate-800 text-white"
@@ -158,7 +163,11 @@ export default function ScreenerPanel({ onPick }: Props) {
                   key={item.value}
                   type="button"
                   aria-pressed={strictness === item.value}
-                  onClick={() => setStrictness(item.value)}
+                  onClick={() => {
+                    // 同理：严格度变了，旧漏斗与旧候选都不再对应当前参数
+                    setStrictness(item.value);
+                    setState({ kind: "idle" });
+                  }}
                   className={`rounded border px-3 py-1 text-sm ${
                     strictness === item.value
                       ? "border-slate-800 bg-slate-800 text-white"
@@ -287,8 +296,15 @@ function ResultView({
           <p className="font-medium">空仓信号：今天默认不出票</p>
           <p className="mt-1 text-xs">
             源书主张「空仓时间应长于持仓时间」，跌破 MA100 时短线操作应当停手。
-            本次仍有 <span className="font-medium">{data.candidateTotal}</span> 只符合个股条件，
-            但按书的择时前提不建议现在动手。
+            {data.candidateTotal > 0 ? (
+              <>
+                本次仍有 <span className="font-medium">{data.candidateTotal}</span> 只符合个股条件，
+                但按书的择时前提不建议现在动手。
+              </>
+            ) : (
+              // 本来就没有候选时，不能说成"是大盘门挡掉的"——那是两回事
+              <>本次即便不看大盘门也没有符合条件的个股。</>
+            )}
           </p>
           <button
             type="button"

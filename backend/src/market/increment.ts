@@ -295,6 +295,7 @@ export async function runIncrement(
   stats.snapshotDate = snapshotDate;
 
   const snapshotUpdates: Array<{ code: string; name: string | null; floatMarketCap: number | null }> = [];
+  const barWrites: Array<{ code: string; bar: BarRow }> = [];
   const indexRows: Array<{ symbol: string; bar: IndexBarRow }> = [];
 
   for (const row of rows) {
@@ -343,18 +344,28 @@ export async function runIncrement(
       stats.skipped[plan.reason] = (stats.skipped[plan.reason] ?? 0) + 1;
       continue;
     }
-    store.insertBars(instrument.code, [plan.bar]);
+    barWrites.push({ code: instrument.code, bar: plan.bar });
     if (plan.refreshed) stats.barsRefreshed++;
     else stats.barsWritten++;
     if (plan.exDiv) stats.exDividends++;
 
-    if (row.quote.name) {
+    // 名称与市值**各自独立**判断：快照偶尔缺名称，但市值照样是有效的。
+    // 绑在一起会让市值闸门因为一个缺失的字段而整档"未生效"。
+    if (row.quote.name !== null || row.quote.floatMarketCap !== null) {
       snapshotUpdates.push({
         code: instrument.code,
         name: row.quote.name,
         floatMarketCap: row.quote.floatMarketCap,
       });
     }
+  }
+
+  // 一次事务写完全部日线：逐根提交在每次增量里是约 6000 次 fsync，
+  // 而且与 store.ts 里"批量写入请自行包事务"的约定相矛盾
+  if (barWrites.length > 0) {
+    store.transaction(() => {
+      for (const write of barWrites) store.insertBars(write.code, [write.bar]);
+    });
   }
 
   if (snapshotUpdates.length > 0) {

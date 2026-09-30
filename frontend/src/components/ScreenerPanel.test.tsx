@@ -825,3 +825,32 @@ describe("短线视角深度分析（#24）", () => {
     expect(document.body.textContent ?? "").not.toContain("目标价");
   });
 });
+
+/* ------------------ 切换参数时旧结果作废（#26 审查） ------------------ */
+
+describe("切换模式或严格度时旧结果立即作废", () => {
+  it("切到事件模式后不再显示上一模式的候选（避免用新模式的标签渲染旧结果）", async () => {
+    stubFetch({ ok: true, body: success });
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+    expect(await screen.findByText("贵州茅台")).toBeInTheDocument();
+    expect(screen.getByText("档2 · 低位 123")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "事件驱动" }));
+
+    // 旧候选消失，且不会出现"档2 · 涨停 B 形态"这种用新标签渲染的错配
+    expect(screen.queryByText("贵州茅台")).not.toBeInTheDocument();
+    expect(screen.queryByText("档2 · 涨停 B 形态")).not.toBeInTheDocument();
+    expect(screen.queryByText("档2 · 低位 123")).not.toBeInTheDocument();
+  });
+
+  it("切严格度后同理作废", async () => {
+    stubFetch({ ok: true, body: success });
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+    expect(await screen.findByText("贵州茅台")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "严格" }));
+    expect(screen.queryByText("贵州茅台")).not.toBeInTheDocument();
+  });
+});

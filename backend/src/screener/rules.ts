@@ -1,4 +1,4 @@
-import { adjustedPrice, countCrossings, countLimitUp, detectLow123, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, macdDifSeries, rangeBounds, smaSeries } from "./structure.js";
+import { adjustedPrice, countCrossings, countLimitUp, detectLow123, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, macdDifSeries, rangeBounds, smaSeries, trendR2 } from "./structure.js";
 import type { ScreenerParams } from "./params.js";
 import type { DailyBar, FunnelStage, MarketGateLike, RuleHit, RuleOutcome, RuleSource, ScreenerCriteria, ScreenerMode, SecurityInput } from "./types.js";
 
@@ -159,8 +159,8 @@ export const RULES: readonly Rule[] = [
     id: "H-bars",
     label: "日 K 根数下限",
     stage: "hardFilters",
-    source: "book",
-    bookRef: "L2386",
+    // 工程约束（指标可计算性），不是书里的规则——标成"书"会虚高溯源徽章
+    source: "offbook",
     evaluate: ({ bars, params }) =>
       bars.length >= params.minListedBars
         ? ok(`${bars.length} 根 ≥ ${params.minListedBars}`)
@@ -353,6 +353,22 @@ export const RULES: readonly Rule[] = [
       return count >= params.limitUpStreakMax
         ? fail(`近 ${params.limitUpStreakWindow} 日涨停 ${count} 次 ≥ ${params.limitUpStreakMax}，属连板后回调再涨停`)
         : ok(`近 ${params.limitUpStreakWindow} 日涨停 ${count} 次 < ${params.limitUpStreakMax}`);
+    },
+  },
+  {
+    id: "U-trendR2",
+    label: "走势流畅度（20 日对数价格回归 R²）",
+    stage: "shortlist",
+    source: "inferred",
+    bookRef: "L408",
+    evaluate: ({ adjBars, params }) => {
+      // 只有严格档要求它；宽松/标准档为 null，直接通过
+      if (params.trendR2Min === null) return ok("本档不要求走势流畅度");
+      const value = trendR2(adjBars, 20);
+      if (value === null) return unknown("样本不足，走势流畅度未判定");
+      return value >= params.trendR2Min
+        ? ok(`R² ${value.toFixed(3)} ≥ ${params.trendR2Min}`)
+        : fail(`R² ${value.toFixed(3)} < ${params.trendR2Min}，走势不够流畅`);
     },
   },
   {

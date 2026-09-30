@@ -24,7 +24,8 @@ const MODES: readonly ScreenerMode[] = ["trend", "event"];
 const STRICTNESS_LEVELS: readonly Strictness[] = ["loose", "standard", "strict"];
 const ALL_BOARDS: readonly Board[] = ["main", "growth", "star", "bj"];
 const DEFAULT_BOARDS: readonly Board[] = ["main", "growth", "star"];
-const DEFAULT_LIMIT = 20;
+// 产品承诺是「筛出至多 10 只供选择」，默认值必须与之一致
+const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
 export type ScreenerRouteDeps = {

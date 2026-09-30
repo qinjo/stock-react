@@ -1,5 +1,6 @@
 import { fromDateKey } from "../market/qlib.js";
 import type { Board } from "../market/qlib.js";
+import { paramsFor, type ScreenerParams } from "./params.js";
 import type {
   ExitPlan,
   FunnelCounts,
@@ -100,7 +101,16 @@ const NULL_LAST = Number.MAX_SAFE_INTEGER;
  *
  * 不用 1–100 评分：书里没有分值体系，权重只会变成无法溯源的解读。
  */
-export function rankShortlist(shortlist: readonly ScreenVerdict[]): ScreenVerdict[] {
+export function rankShortlist(
+  shortlist: readonly ScreenVerdict[],
+  params: ScreenerParams = paramsFor("standard"),
+): ScreenVerdict[] {
+  /** 「刚突破 MA100」的分桶：全程在上或在上穿窗口内算 0，否则算 1。 */
+  const freshBucket = (v: ScreenVerdict): number => {
+    const since = v.metrics.barsSinceMa100Cross;
+    return since === null || since <= params.ma100BreakoutWindow ? 0 : 1;
+  };
+
   return [...shortlist].sort((a, b) => {
     const tierA = a.signals.bestTier ?? NULL_LAST;
     const tierB = b.signals.bestTier ?? NULL_LAST;
@@ -110,6 +120,12 @@ export function rankShortlist(shortlist: readonly ScreenVerdict[]): ScreenVerdic
     const spaceA = a.exit.stopSpace;
     const spaceB = b.exit.stopSpace;
     if (spaceA !== spaceB) return spaceA - spaceB;
+
+    // 书 L545：刚突破 MA100 的更值得关注。按本档窗口分桶——
+    // 严格档（≤5 日）比宽松档（≤20 日）更看重"刚突破"，这就是三档差异的落点之一。
+    const freshA = freshBucket(a);
+    const freshB = freshBucket(b);
+    if (freshA !== freshB) return freshA - freshB;
 
     const sinceA = a.metrics.barsSinceMa100Cross ?? NULL_LAST;
     const sinceB = b.metrics.barsSinceMa100Cross ?? NULL_LAST;
@@ -189,7 +205,7 @@ export function toScreenResponse(
     nameOf?: (code: string) => string | null;
   },
 ): ScreenResponse {
-  const ranked = rankShortlist(outcome.shortlisted);
+  const ranked = rankShortlist(outcome.shortlisted, paramsFor(outcome.criteria.strictness));
   // 空仓档不出票：候选清空，但 `candidateTotal` 保留真实数量——
   // 让界面能说出"本次有 N 只符合个股条件，但大盘空仓"，而不是连这个信息也吞掉
   const candidates = outcome.suppressed

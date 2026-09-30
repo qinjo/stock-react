@@ -328,7 +328,7 @@ export type UpwardGap = {
   atrMultiple: number | null;
   /** 是否向上**突破性**缺口：跳空越过了前 `lookback` 根的最高价 */
   breakout: boolean;
-  /** 是否已被回补 */
+  /** 是否已被回补（返回的缺口恒为 false——已回补的在扫描时就被跳过） */
   filled: boolean;
   /** 距今多少根（0 = 当天） */
   age: number;
@@ -373,6 +373,10 @@ export function detectUpwardGap(
         break;
       }
     }
+    // 被回补的缺口直接跳过：否则"昨天回补、前天没回补"时，
+    // 前天那个仍然有效的缺口会被昨天的死缺口掩蔽，S6/S7 静默消失
+    if (filled) continue;
+
     const atr = options.atr?.[t] ?? null;
     return {
       index: t,

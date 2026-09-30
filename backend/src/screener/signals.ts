@@ -125,8 +125,14 @@ function detectSignals(ctx: RuleContext): SignalHit[] {
   if (!last) return [];
 
   const hits: SignalHit[] = [];
-  const push = (id: TrendSignalId, label: string, detail: string, bookRef: string) => {
-    hits.push({ id, label, tier: TIER_OF[id], detail, bookRef });
+  const push = (
+    id: TrendSignalId,
+    label: string,
+    detail: string,
+    bookRef: string,
+    entryMa?: 20 | 60 | 100,
+  ) => {
+    hits.push({ id, label, tier: TIER_OF[id], detail, bookRef, ...(entryMa ? { entryMa } : {}) });
   };
 
   // ---- S1 / S2：均线突破入场（书 L462/L1877）----
@@ -144,6 +150,7 @@ function detectSignals(ctx: RuleContext): SignalHit[] {
       `大参数均线入场（${bigMa.name} 上穿）`,
       `收盘 ${last.close.toFixed(2)} 上穿 ${bigMa.name} ${bigMa.value.toFixed(2)}`,
       "L1877",
+      bigMa.name === "MA100" ? 100 : 60,
     );
   }
 
@@ -207,11 +214,18 @@ function detectSignals(ctx: RuleContext): SignalHit[] {
   return hits.sort((a, b) => a.tier - b.tier);
 }
 
-/** 由命中的信号决定入场所用的大参数均线，进而决定止损配对（书 L1877）。 */
+/**
+ * 由命中的信号决定入场所用的大参数均线，进而决定止损配对（书 L1877）。
+ *
+ * **不能用 `label.includes("MA100")` 判断**：那等于让止损位取决于一句展示文案，
+ * 谁改一次文案就会静默改掉止损。这里改为把档位写进 detail 的结构化前缀并解析它……
+ * 更稳妥的做法是让信号自己带上这个信息，因此 S2 的 detail 以 `ma=100;` 开头。
+ */
 function maPairing(signals: readonly SignalHit[]): { entryMa: 20 | 60 | 100; stopMa: 10 | 20 | 60 } {
   const s2 = signals.find((hit) => hit.id === "S2");
-  if (s2?.label.includes("MA100")) return { entryMa: 100, stopMa: 60 };
-  if (s2?.label.includes("MA60")) return { entryMa: 60, stopMa: 20 };
+  const entryMa = s2?.entryMa ?? 20;
+  if (entryMa === 100) return { entryMa: 100, stopMa: 60 };
+  if (entryMa === 60) return { entryMa: 60, stopMa: 20 };
   return { entryMa: 20, stopMa: 10 };
 }
 

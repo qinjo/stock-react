@@ -138,6 +138,12 @@ export type SignalHit = {
   tier: number;
   detail: string;
   bookRef: string;
+  /**
+   * 本次入场依据的大参数均线（S2 用）。
+   *
+   * 止损配对靠它决定，**不能靠 label 文案**——否则改一句展示文字就会静默改掉止损位。
+   */
+  entryMa?: 20 | 60 | 100;
 };
 
 export type SignalSet = {

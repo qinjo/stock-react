@@ -187,6 +187,8 @@ export async function runScreen(
         options.params.boards.join(","),
         options.criteria.includeBeijing,
         options.params.ignoreMarketGate,
+        // limit 进键：响应是按 limit 截断的，不进键的话 limit=5 会毒化 limit=10
+        `limit=${options.limit}`,
         // 大盘门随行情变化：不纳入键的话，昨天的"空仓档"会被当成今天的结果命中
         `${marketGate.state}:${marketGate.positionAdvice}`,
         fingerprint,

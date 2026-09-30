@@ -131,6 +131,7 @@ export class MarketStore {
    */
   migrate(): void {
     this.db.exec(SCHEMA);
+    this.ensureValuationDateIndex();
     this.addColumnIfMissing("instruments", "float_market_cap", "REAL");
     this.setMeta("schema_version", SCHEMA_VERSION);
   }
@@ -294,6 +295,16 @@ export class MarketStore {
     for (const row of rows) {
       stmt.run(row.code, row.date, row.close, row.peTtm, row.pbMrq, row.psTtm, row.boardName);
     }
+  }
+
+  /**
+   * 估值表按日期查需要独立索引。
+   *
+   * 主键是 `(code, date)`，`WHERE date = ?` 用不上主键前缀 —— 六年回填要按日问约 1500 次，
+   * 每次全表扫几百万行。这是"断点续跑"这个功能带来的隐藏代价。
+   */
+  private ensureValuationDateIndex(): void {
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_valuation_date ON valuation(date)");
   }
 
   /** 估值表里最新的交易日；空表返回 null。 */

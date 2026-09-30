@@ -39,7 +39,8 @@ function metricsOf(ctx: ReturnType<typeof buildContext>): ScreenMetrics {
       ctx.adjBars.map((bar) => bar.close),
       ctx.ma100,
     ),
-    trendR2: trendR2(ctx.bars, 20),
+    // H9：指标一律算在后复权序列上
+    trendR2: trendR2(ctx.adjBars, 20),
     floatMarketCap: ctx.security.floatMarketCap,
     turnoverAmount: lastBar?.amount ?? null,
   };

@@ -86,10 +86,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.status(err.httpStatus).send(err.toBody());
     }
     const status = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
+    // 不能把任何 5xx 都说成 SOURCE_UNAVAILABLE：本地库出错也是 5xx，
+    // 而界面会据此显示"数据源暂时不可用（东财有反爬）"——那是误导。
+    // 数据源错误由各处显式抛 SOURCE_UNAVAILABLE / DATA_NOT_READY；其余归 INTERNAL。
+    const isServerFault = status >= 500;
     return reply.status(status).send({
       status: "error",
-      code: "SOURCE_UNAVAILABLE",
-      message: status >= 500 ? "服务暂时不可用" : err.message,
+      code: isServerFault ? "INTERNAL" : "INVALID_INPUT",
+      message: isServerFault ? "服务内部错误" : err.message,
     });
   });
 
