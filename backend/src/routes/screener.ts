@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ApiError } from "../errors.js";
 import type { Board } from "../market/qlib.js";
+import type { ChatFn } from "../analysis/llm.js";
 import type { IncrementStats } from "../market/increment.js";
 import { MarketDataNotReadyError, openMarketStore } from "../market/open.js";
 import type { MarketStore } from "../market/store.js";
@@ -34,6 +35,8 @@ export type ScreenerRouteDeps = {
   now?: () => Date;
   /** 结果缓存（跨请求共享） */
   cache?: PromptCache<{ response: ScreenResponse }>;
+  /** 大模型复核入口；为 null 表示未配置密钥（自动降级，不阻断筛选） */
+  chat?: ChatFn | null;
   incrementThrottleMs?: number;
 };
 
@@ -139,6 +142,7 @@ export async function screenerRoutes(app: FastifyInstance, deps: ScreenerRouteDe
         {
           openStore,
           runIncrement: deps.runIncrement,
+          ...(deps.chat !== undefined ? { chat: deps.chat } : {}),
           now,
           ...(deps.cache ? { cache: deps.cache } : {}),
           ...(deps.incrementThrottleMs !== undefined

@@ -365,3 +365,59 @@ describe("GET /api/screen 的大盘门", () => {
     expect(body.candidates).toHaveLength(1);
   });
 });
+
+/* ------------------------- AI 档内复核（#21） ------------------------- */
+
+describe("GET /api/screen 的大模型复核", () => {
+  const withChat = (chat: unknown) =>
+    buildApp({
+      screener: {
+        openStore: () => new MarketStore(dbPath),
+        runIncrement: async () => noopStats(),
+        now: () => NOW,
+        chat: chat as never,
+      },
+    });
+
+  it("复核成功时贴上一句话理由，并解除降级标记", async () => {
+    const res = await withChat(async () => ({
+      content: '{"reviewed":[{"code":"000001","reason":"结构最清晰"}]}',
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    })).inject({ method: "GET", url: "/api/screen" });
+
+    const body = res.json();
+    expect(body.degraded.llmReview).toBe(false);
+    expect(body.candidates.find((c: { code: string }) => c.code === "000001")?.reasoning).toBe(
+      "结构最清晰",
+    );
+    // 未被模型提到的候选仍然在列，只是没有理由
+    expect(body.candidates.length).toBeGreaterThan(1);
+  });
+
+  it("模型抛错时回退为规则排序：候选照常给出，只标降级", async () => {
+    const res = await withChat(async () => {
+      throw new Error("LLM 调用失败：HTTP 429");
+    }).inject({ method: "GET", url: "/api/screen" });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.degraded.llmReview).toBe(true);
+    expect(body.degraded.reason).toContain("429");
+    expect(body.candidates.length).toBeGreaterThan(0);
+    expect(body.candidates.every((c: { reasoning: string | null }) => c.reasoning === null)).toBe(true);
+  });
+
+  it("未配置密钥时同样走降级，而不是整体失败", async () => {
+    const res = await buildApp({
+      screener: {
+        openStore: () => new MarketStore(dbPath),
+        runIncrement: async () => noopStats(),
+        chat: null,
+      },
+    }).inject({ method: "GET", url: "/api/screen" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().degraded.llmReview).toBe(true);
+    expect(res.json().degraded.reason).toContain("未配置大模型密钥");
+  });
+});

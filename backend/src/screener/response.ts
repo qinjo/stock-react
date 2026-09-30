@@ -56,6 +56,8 @@ export type ScreenCandidate = {
   exit: ExitPlan;
   /** 参考压力位：可能受阻的位置，不是涨幅预测 */
   resistance: ReferenceResistance[];
+  /** 大模型给的一句话理由；未经复核时为 null */
+  reasoning: string | null;
 };
 
 export type ScreenRequestParams = {
@@ -163,6 +165,7 @@ function toCandidate(
     signalTier: verdict.signals.bestTier,
     exit: verdict.exit,
     resistance: verdict.resistance,
+    reasoning: null,
   };
 }
 

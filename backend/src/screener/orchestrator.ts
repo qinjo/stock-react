@@ -4,6 +4,8 @@ import { PromptCache } from "../cache.js";
 import { screenUniverse } from "./engine.js";
 import { loadUniverseFromStore } from "./load.js";
 import { toScreenResponse, type ScreenRequestParams, type ScreenResponse } from "./response.js";
+import { applyReview, reviewCandidates } from "./review.js";
+import type { ChatFn } from "../analysis/llm.js";
 import { evaluateMarketGate, type IndexSeries } from "./market-gate.js";
 import type { MarketGateLike, ScreenerCriteria } from "./types.js";
 
@@ -54,6 +56,11 @@ export type ScreenRunDeps = {
   now?: () => Date;
   /** 结果缓存（跨请求共享） */
   cache?: PromptCache<{ response: ScreenResponse }>;
+  /**
+   * 大模型复核入口。为 null 表示未配置密钥 —— 此时**照常出结果**，
+   * 只在响应里标明「未经 AI 复核」。
+   */
+  chat?: ChatFn | null;
   /**
    * 距上次增量尝试不足该毫秒数就不再尝试。
    * 没有它的话，休市/节假日里每次点击都会白打十几个请求——数据源不会因此更新。
@@ -214,11 +221,17 @@ export async function runScreen(
       nameOf: (code) => names.get(code) ?? null,
     });
 
-    deps.cache?.set(cacheKey, { response });
+    // 大模型复核：只在同一信号档内排序 + 写理由；失败即回退为规则排序
+    const review = await reviewCandidates(response.candidates, {
+      chat: deps.chat ?? null,
+      mode: options.criteria.mode,
+    });
+    const reviewed = applyReview(response, review);
+    deps.cache?.set(cacheKey, { response: reviewed });
 
     return {
       kind: "ok",
-      response,
+      response: reviewed,
       fromCache: false,
       increment: summarize(stats, incrementFailed, incrementError, now().getTime() - incrementStarted),
     };

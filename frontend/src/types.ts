@@ -337,6 +337,8 @@ export type ScreenCandidate = {
   signalTier: number | null;
   exit: ExitPlan;
   resistance: ReferenceResistance[];
+  /** 大模型给的一句话理由；未经复核时为 null */
+  reasoning: string | null;
 };
 
 export type ScreenFunnel = {

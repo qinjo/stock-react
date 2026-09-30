@@ -551,6 +551,13 @@ function CandidateCard({
         </div>
       </div>
 
+      {candidate.reasoning && (
+        <p className="mt-2 text-xs text-slate-600">
+          <span className="rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700">AI 复核</span>
+          <span className="ml-1.5">{candidate.reasoning}</span>
+        </p>
+      )}
+
       {strongest && (
         <p className="mt-2 text-xs text-slate-600">
           <span className="text-slate-400">信号：</span>

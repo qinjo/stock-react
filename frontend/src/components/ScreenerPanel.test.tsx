@@ -95,6 +95,7 @@ const candidate = {
       detail: "前 60 根高点 1258.00（可能受阻的位置，不是涨幅预测）",
     },
   ],
+  reasoning: "回调更浅、量能温和，作为同档内优先。",
 };
 
 const success: ScreenResponse = {
@@ -713,5 +714,37 @@ describe("严格度三档与一键放宽（#19）", () => {
 
     expect(await screen.findByText("空仓信号：今天默认不出票")).toBeInTheDocument();
     expect(screen.queryByText("今日无符合条件的个股")).not.toBeInTheDocument();
+  });
+});
+
+/* ---------------------- AI 复核与降级（#21） ---------------------- */
+
+describe("AI 档内复核与降级（#21）", () => {
+  it("展示 AI 复核理由", async () => {
+    stubFetch({ ok: true, body: { ...success, degraded: { llmReview: false, reason: null } } });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    expect(await screen.findByText("AI 复核")).toBeInTheDocument();
+    expect(screen.getByText(/回调更浅、量能温和/)).toBeInTheDocument();
+  });
+
+  it("降级时标注「未经大模型复核」，且不显示 AI 复核徽章", async () => {
+    stubFetch({
+      ok: true,
+      body: {
+        ...success,
+        candidates: [{ ...success.candidates[0], reasoning: null }],
+        degraded: { llmReview: true, reason: "大模型复核失败，已回退为规则排序：HTTP 429" },
+      },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    const notice = await screen.findByText(/未经大模型复核/);
+    expect(notice.textContent).toContain("429");
+    expect(screen.queryByText("AI 复核")).not.toBeInTheDocument();
+    // 候选仍然照常展示——模型挂掉丢的只是"复核"，不是数据
+    expect(screen.getByText("贵州茅台")).toBeInTheDocument();
   });
 });

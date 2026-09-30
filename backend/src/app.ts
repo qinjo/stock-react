@@ -74,6 +74,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       // 生产走真实增量；测试必须显式注入假实现（类型上也是必填）
       runIncrement,
       cache: screenCache,
+      // 未配置密钥时传 null：复核会自动降级，而不是让整个筛选失败
+      chat,
       ...(options.screener ?? {}),
     }),
   );
