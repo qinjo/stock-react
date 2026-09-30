@@ -277,7 +277,16 @@ export type ScreenMetrics = {
   turnoverAmount: number | null;
 };
 
-export type SignalId = "S1" | "S2" | "S3" | "S5" | "S13";
+/**
+ * 信号 id。
+ *
+ * **必须与后端 `backend/src/screener/types.ts` 的 `SignalId` 一一对应**——
+ * 事件模式的五个 id 曾经漏在这里，导致类型声称"不可能是 S10"，
+ * 而接口在事件模式下返回的正是它们。界面只显示 `label` 所以没炸，
+ * 但任何 `switch (id)` 都会把事件分支当成不可达。
+ * 这条约束由 `types.contract.test.ts` 守住。
+ */
+export type SignalId = "S1" | "S2" | "S3" | "S5" | "S13" | "S6" | "S7" | "S9" | "S10" | "S12";
 
 export type SignalHit = {
   id: SignalId;
@@ -287,6 +296,8 @@ export type SignalHit = {
   detail: string;
   /** 书内定位，如 L681 */
   bookRef: string;
+  /** 本次入场依据的大参数均线（S2 用，决定止损配对） */
+  entryMa?: 20 | 60 | 100;
 };
 
 export type SignalSet = {
