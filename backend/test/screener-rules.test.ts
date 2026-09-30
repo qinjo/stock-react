@@ -128,8 +128,11 @@ describe("基础池", () => {
   });
 
   it("U-marketCap：超出区间淘汰，缺数据时未判定且不淘汰", () => {
+    // 标准档上限 2026-09-30 由 80 亿放宽到 150 亿（见 #29）：
+    // 100 亿现在落在区间内，200 亿才是"超出"
     expect(run("U-marketCap", goodSecurity({ floatMarketCap: 40e8 })).ok).toBe(true);
-    expect(run("U-marketCap", goodSecurity({ floatMarketCap: 100e8 })).ok).toBe(false);
+    expect(run("U-marketCap", goodSecurity({ floatMarketCap: 100e8 })).ok).toBe(true);
+    expect(run("U-marketCap", goodSecurity({ floatMarketCap: 200e8 })).ok).toBe(false);
     expect(run("U-marketCap", goodSecurity({ floatMarketCap: 10e8 })).ok).toBe(false);
 
     const missing = run("U-marketCap", goodSecurity({ floatMarketCap: null }));

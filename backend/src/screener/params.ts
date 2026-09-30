@@ -95,7 +95,11 @@ const ALL_TIERS: Record<Strictness, ScreenerParams> = {
   },
   standard: {
     floatMarketCapMin: 20e8,
-    floatMarketCapMax: 80e8,
+    // 2026-09-30 由用户拍板：80 亿 → 150 亿（见 #29）。
+    // 依据：实测 689 只市值被拒里 75% 是因为高于上限，而该上限完全由我们构造
+    // （书中只有 L1686 一个案例）。放宽后标准档与宽松档在该项上相同——
+    // 三档的差异仍由成交额、根数、档位等其它参数维持。
+    floatMarketCapMax: 150e8,
     minTurnoverAmount: 5_000e4,
     minListedBars: 150,
     ma100BreakoutWindow: 10,

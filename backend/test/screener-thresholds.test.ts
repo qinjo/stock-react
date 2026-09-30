@@ -64,23 +64,27 @@ describe("H-bars 日 K 根数下限：≥ 为界（含等号）", () => {
 describe("U-marketCap 流通市值区间：两端都含等号", () => {
   const withCap = (cap: number | null) => goodSecurity({ floatMarketCap: cap });
 
-  it("标准档 20 亿–80 亿：下沿、上沿都通过", () => {
+  it("标准档 20 亿–150 亿：下沿、上沿都通过（上限 2026-09-30 由 80 亿放宽，见 #29）", () => {
     expect(paramsFor("standard").floatMarketCapMin).toBe(20e8);
-    expect(paramsFor("standard").floatMarketCapMax).toBe(80e8);
+    expect(paramsFor("standard").floatMarketCapMax).toBe(150e8);
     expect(outcomeOf("U-marketCap", withCap(20e8)).ok).toBe(true);
-    expect(outcomeOf("U-marketCap", withCap(80e8)).ok).toBe(true);
+    expect(outcomeOf("U-marketCap", withCap(150e8)).ok).toBe(true);
   });
 
   it("越界一侧各测一次", () => {
     expect(outcomeOf("U-marketCap", withCap(20e8 - 1)).ok).toBe(false);
-    expect(outcomeOf("U-marketCap", withCap(80e8 + 1)).ok).toBe(false);
+    expect(outcomeOf("U-marketCap", withCap(150e8 + 1)).ok).toBe(false);
   });
 
-  it("三档上沿依次收窄（150 / 80 / 50 亿）", () => {
-    // 60 亿：宽松与标准放行、严格拦下——这条同时钉住三档取值
-    expect(outcomeOf("U-marketCap", withCap(60e8), "loose").ok).toBe(true);
-    expect(outcomeOf("U-marketCap", withCap(60e8), "standard").ok).toBe(true);
-    expect(outcomeOf("U-marketCap", withCap(60e8), "strict").ok).toBe(false);
+  it("宽松与标准现在同在上限 150 亿，严格仍收在 50 亿", () => {
+    // 注意：放宽后宽松与标准在该项上相同——三档差异由其它参数维持。
+    // 100 亿这只：宽松/标准放行、严格拦下
+    expect(paramsFor("loose").floatMarketCapMax).toBe(150e8);
+    expect(paramsFor("standard").floatMarketCapMax).toBe(150e8);
+    expect(paramsFor("strict").floatMarketCapMax).toBe(50e8);
+    expect(outcomeOf("U-marketCap", withCap(100e8), "loose").ok).toBe(true);
+    expect(outcomeOf("U-marketCap", withCap(100e8), "standard").ok).toBe(true);
+    expect(outcomeOf("U-marketCap", withCap(100e8), "strict").ok).toBe(false);
   });
 
   it("市值缺失时标为未判定（而不是当作不合格）", () => {
@@ -124,8 +128,12 @@ describe("所有带数值阈值的规则都在边界两侧有断言", () => {
 
     // 宽松档必须更松
     expect(loose.minTurnoverAmount).toBeLessThan(standard.minTurnoverAmount);
-    expect(loose.floatMarketCapMax).toBeGreaterThan(standard.floatMarketCapMax);
     expect(loose.stopSpaceMax).toBeGreaterThan(standard.stopSpaceMax);
+    // 市值上限：**放宽后宽松与标准相同**（2026-09-30 用户拍板，#29）。
+    // 这条如实反映"该项不再是三档差异的落点"，而不是把断言改松了事——
+    // 三档的差异仍由成交额、上市根数、允许档位等参数维持。
+    expect(loose.floatMarketCapMax).toBe(standard.floatMarketCapMax);
+    expect(standard.floatMarketCapMax).toBeGreaterThan(strict.floatMarketCapMax);
 
     // 单值项在三档间不应漂移（它们不是三档差异的落点）
     expect(loose.swingWindow).toBe(strict.swingWindow);
