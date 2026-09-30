@@ -211,6 +211,7 @@ cd frontend && npm test   # 128 项：搜索补全、快照卡、图表数据转
 - 历史回放验收记录：[`docs/verification-replay-2026-09-29.md`](docs/verification-replay-2026-09-29.md)
 - 规则溯源抽查：[`docs/verification-book-citations.md`](docs/verification-book-citations.md)（书 → 提炼笔记 → 代码）
 - 规则归因画像：[`docs/verification-rule-attribution.md`](docs/verification-rule-attribution.md)（真实数据下谁拦下了谁）
+- **验证方法备忘**：[`docs/verification-methods.md`](docs/verification-methods.md)——五种验证手段各自能找出什么、以及它们自己会怎么骗你
 - 调研笔记：[`_research/开源LLM金融分析项目调研笔记.md`](_research/开源LLM金融分析项目调研笔记.md)、[`free-stock-api-research.md`](free-stock-api-research.md)
 
 ## 范围之外（当前版本）
