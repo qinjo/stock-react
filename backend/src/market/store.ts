@@ -400,6 +400,45 @@ export class MarketStore {
     return rows.reverse();
   }
 
+  /**
+   * 回放专用：读截至 `asOf` 的最近 `limit` 根（含当天）。
+   *
+   * 历史回放必须**截断**序列——否则等于用未来数据做筛选，
+   * 那是最典型的未来函数，结果会好得毫无意义。
+   */
+  readBarsUpTo(code: string, asOf: number, limit: number): BarRow[] {
+    const rows = this.prepare(
+      `SELECT date, open, high, low, close, volume, amount, adj_factor AS adjFactor
+       FROM bars WHERE code = ? AND date <= ? ORDER BY date DESC LIMIT ?`,
+    ).all(code, asOf, limit) as unknown as BarRow[];
+    return rows.reverse();
+  }
+
+  /** 回放专用：读截至 `asOf` 的指数日线。 */
+  readIndexBarsUpTo(code: string, asOf: number, limit: number): IndexBarRow[] {
+    const rows = this.prepare(
+      `SELECT date, open, high, low, close, volume FROM index_bars
+       WHERE code = ? AND date <= ? ORDER BY date DESC LIMIT ?`,
+    ).all(code, asOf, limit) as unknown as IndexBarRow[];
+    return rows.reverse();
+  }
+
+  /** 截至 `asOf` 的最新交易日（回放时的"数据截止日"）。 */
+  latestTradeDateUpTo(asOf: number): number | null {
+    const row = this.prepare("SELECT MAX(date) AS d FROM bars WHERE date <= ?").get(asOf) as
+      | RawBar
+      | undefined;
+    return row?.d ?? null;
+  }
+
+  /** 交易日历里截至 `asOf` 的最近 `n` 个交易日（升序）。 */
+  recentTradingDates(asOf: number, n: number): number[] {
+    const rows = this.prepare(
+      "SELECT date FROM trading_calendar WHERE date <= ? ORDER BY date DESC LIMIT ?",
+    ).all(asOf, n) as unknown as Array<{ date: number }>;
+    return rows.map((row) => row.date).reverse();
+  }
+
   readIndexBars(code: string, limit?: number): IndexBarRow[] {
     if (limit === undefined) {
       return this.prepare(

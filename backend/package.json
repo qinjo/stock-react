@@ -12,7 +12,8 @@
     "verify:kline": "tsx scripts/verify-kline-vs-snapshot.ts",
     "screen:preview": "tsx scripts/preview-screen.ts",
     "update:kline": "tsx scripts/update-kline.ts",
-    "backfill:valuation": "tsx scripts/backfill-valuation.ts"
+    "backfill:valuation": "tsx scripts/backfill-valuation.ts",
+    "replay:screen": "tsx scripts/replay-screen.ts"
   },
   "dependencies": {
     "fastify": "^5.12.1",

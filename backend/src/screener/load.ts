@@ -13,14 +13,20 @@ import type { SecurityInput } from "./types.js";
  */
 export function* loadUniverseFromStore(
   store: MarketStore,
-  options: { barsLimit?: number; codeFilter?: (row: ReturnType<MarketStore["listInstruments"]>[number]) => boolean } = {},
+  options: {
+    barsLimit?: number;
+    codeFilter?: (row: ReturnType<MarketStore["listInstruments"]>[number]) => boolean;
+    /** 历史回放：只喂截至该日的日线，绝不让未来数据漏进来 */
+    asOfDate?: number;
+  } = {},
 ): Generator<SecurityInput> {
   const barsLimit = options.barsLimit ?? 260;
-  const latestTradeDate = store.latestTradeDate();
+  const asOf = options.asOfDate;
+  const latestTradeDate = asOf === undefined ? store.latestTradeDate() : store.latestTradeDateUpTo(asOf);
 
   for (const row of store.listInstruments()) {
     if (options.codeFilter && !options.codeFilter(row)) continue;
-    const bars = store.readBars(row.code, barsLimit);
+    const bars = asOf === undefined ? store.readBars(row.code, barsLimit) : store.readBarsUpTo(row.code, asOf, barsLimit);
     if (bars.length === 0) continue;
     const lastBarDate = (bars[bars.length - 1] as { date: number }).date;
     yield {

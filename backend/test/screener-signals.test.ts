@@ -252,6 +252,11 @@ describe("排序：档序优先，档内按止损空间", () => {
     expect(response.candidates.map((c) => c.code)).toEqual(["strong", "weak"]);
     // 有信号的排前面；无信号的（bestTier 为 null）垫底，而不是被当成 0 排到最前
     expect(response.candidates[0]?.signalTier).toBe(2);
+    // 报价收口到分：界面与回放报告都不该出现 4.629999804283996 这种尾数
+    for (const candidate of response.candidates) {
+      expect(candidate.exit.entry).toBe(Math.round(candidate.exit.entry * 100) / 100);
+      expect(candidate.exit.stop).toBe(Math.round(candidate.exit.stop * 100) / 100);
+    }
     expect(response.candidates[1]?.signalTier).toBeNull();
   });
 

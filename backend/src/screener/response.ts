@@ -163,8 +163,17 @@ function toCandidate(
       .map((hit) => `${hit.label}：${hit.outcome.detail}`),
     signals: verdict.signals,
     signalTier: verdict.signals.bestTier,
-    exit: verdict.exit,
-    resistance: verdict.resistance,
+    // 报价只到分：入场/止损/压力位都是"缩放值 ÷ 因子"的浮点结果，尾数没有意义
+    exit: {
+      ...verdict.exit,
+      entry: round2(verdict.exit.entry) ?? verdict.exit.entry,
+      stop: round2(verdict.exit.stop) ?? verdict.exit.stop,
+      stopSpace: Math.round(verdict.exit.stopSpace * 1e4) / 1e4,
+    },
+    resistance: verdict.resistance.map((item) => ({
+      ...item,
+      price: round2(item.price) ?? item.price,
+    })),
     reasoning: null,
   };
 }
