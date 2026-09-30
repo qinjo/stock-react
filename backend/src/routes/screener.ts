@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { ApiError } from "../errors.js";
 import type { Board } from "../market/qlib.js";
+import type { IncrementStats } from "../market/increment.js";
 import { MarketDataNotReadyError, openMarketStore } from "../market/open.js";
 import type { MarketStore } from "../market/store.js";
-import { screenUniverse } from "../screener/engine.js";
-import { loadUniverseFromStore } from "../screener/load.js";
-import { toScreenResponse, type ScreenRequestParams } from "../screener/response.js";
+import type { PromptCache } from "../cache.js";
+import { runScreen, type IncrementSummary } from "../screener/orchestrator.js";
+import type { ScreenRequestParams, ScreenResponse } from "../screener/response.js";
 import type { ScreenerCriteria, ScreenerMode, Strictness } from "../screener/types.js";
 
 /**
@@ -15,9 +16,7 @@ import type { ScreenerCriteria, ScreenerMode, Strictness } from "../screener/typ
  * - 参数非法 → `INVALID_INPUT`(400)
  * - 本地库不存在或为空 → `DATA_NOT_READY`(503)，**刻意不同于** `SOURCE_UNAVAILABLE`：
  *   后者是"外部数据源挂了"，前者是"你还没做初始化"，用户要采取的动作完全不同
- * - 其他内部错误 → 由全局错误处理器兜底
- *
- * 全市场遍历是同步且 CPU 密集的（约数秒）；本期不做缓存，缓存见后续工单。
+ * - 增量失败**不**报错：本地数据还在，照常出结果，但响应里如实标注 `increment.failed`
  */
 
 const MODES: readonly ScreenerMode[] = ["trend", "event"];
@@ -30,7 +29,12 @@ const MAX_LIMIT = 100;
 export type ScreenerRouteDeps = {
   /** 打开日K库；默认从默认路径打开，测试注入临时库 */
   openStore?: () => MarketStore;
+  /** 增量入口；刻意必填，避免"忘记注入就悄悄打网络"（见编排层注释） */
+  runIncrement: (store: MarketStore) => Promise<IncrementStats>;
   now?: () => Date;
+  /** 结果缓存（跨请求共享） */
+  cache?: PromptCache<{ response: ScreenResponse }>;
+  incrementThrottleMs?: number;
 };
 
 type ScreenQuery = {
@@ -64,6 +68,7 @@ function parseBoolean(raw: string | undefined, fallback = false): boolean {
 
 export function parseScreenQuery(query: ScreenQuery): {
   params: ScreenRequestParams;
+  criteria: ScreenerCriteria;
   limit: number;
 } {
   const mode = oneOf(query.mode, MODES, "trend", "mode");
@@ -95,32 +100,47 @@ export function parseScreenQuery(query: ScreenQuery): {
     throw new ApiError("INVALID_INPUT", `limit 必须是正整数，收到「${query.limit}」`, 400);
   }
 
+  const params: ScreenRequestParams = {
+    mode,
+    strictness,
+    boards,
+    ignoreMarketGate: parseBoolean(query.ignoreMarketGate),
+    refresh: parseBoolean(query.refresh),
+  };
+
   return {
-    params: {
-      mode,
-      strictness,
-      boards,
-      // 这两个参数本期只做透传与校验：大盘门覆盖见大盘门工单，强制刷新见缓存工单
-      ignoreMarketGate: parseBoolean(query.ignoreMarketGate),
-      refresh: parseBoolean(query.refresh),
-    },
+    params,
+    criteria: { mode, strictness, includeBeijing: boards.includes("bj") },
     limit: Math.min(rawLimit, MAX_LIMIT),
   };
 }
 
-export async function screenerRoutes(
-  app: FastifyInstance,
-  deps: ScreenerRouteDeps = {},
-): Promise<void> {
+export type ScreenRouteResponse = ScreenResponse & {
+  fromCache: boolean;
+  increment: IncrementSummary;
+};
+
+export async function screenerRoutes(app: FastifyInstance, deps: ScreenerRouteDeps): Promise<void> {
   const openStore = deps.openStore ?? (() => openMarketStore());
   const now = deps.now ?? (() => new Date());
 
   app.get<{ Querystring: ScreenQuery }>("/api/screen", async (req) => {
-    const { params, limit } = parseScreenQuery(req.query);
+    const { params, criteria, limit } = parseScreenQuery(req.query);
 
-    let store: MarketStore;
+    let result: Awaited<ReturnType<typeof runScreen>>;
     try {
-      store = openStore();
+      result = await runScreen(
+        { criteria, params, limit, refresh: params.refresh },
+        {
+          openStore,
+          runIncrement: deps.runIncrement,
+          now,
+          ...(deps.cache ? { cache: deps.cache } : {}),
+          ...(deps.incrementThrottleMs !== undefined
+            ? { incrementThrottleMs: deps.incrementThrottleMs }
+            : {}),
+        },
+      );
     } catch (err) {
       if (err instanceof MarketDataNotReadyError) {
         throw new ApiError(
@@ -132,39 +152,15 @@ export async function screenerRoutes(
       throw err;
     }
 
-    try {
-      const dataDateKey = store.latestTradeDate();
-      if (dataDateKey === null) {
-        throw new ApiError(
-          "DATA_NOT_READY",
-          "本地日K库是空的。请先运行 npm run bootstrap:kline",
-          503,
-        );
-      }
-
-      const allowed = new Set(params.boards);
-      const criteria: ScreenerCriteria = {
-        mode: params.mode,
-        strictness: params.strictness,
-        includeBeijing: allowed.has("bj"),
-      };
-
-      const outcome = screenUniverse(
-        loadUniverseFromStore(store, { codeFilter: (row) => allowed.has(row.board) }),
-        criteria,
-      );
-
-      const names = new Map(store.listInstruments().map((row) => [row.code, row.name] as const));
-
-      return toScreenResponse(outcome, {
-        dataDateKey,
-        refreshedAt: now(),
-        params,
-        limit,
-        nameOf: (code) => names.get(code) ?? null,
-      });
-    } finally {
-      store.close();
+    if (result.kind === "empty") {
+      throw new ApiError("DATA_NOT_READY", "本地日K库是空的。请先运行 npm run bootstrap:kline", 503);
     }
+
+    const body: ScreenRouteResponse = {
+      ...result.response,
+      fromCache: result.fromCache,
+      increment: result.increment,
+    };
+    return body;
   });
 }

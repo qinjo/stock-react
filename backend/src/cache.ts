@@ -67,6 +67,11 @@ export class PromptCache<T> {
     this.store.set(key, { value, expiresAt: this.now() + this.ttlMs });
   }
 
+  /** 删除单个键：强制刷新时需要真的丢掉上一次的结果，而不是等 TTL。 */
+  delete(key: string): void {
+    this.store.delete(key);
+  }
+
   clear(): void {
     this.store.clear();
   }

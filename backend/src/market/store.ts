@@ -297,8 +297,18 @@ export class MarketStore {
          open = excluded.open, high = excluded.high, low = excluded.low, close = excluded.close,
          volume = excluded.volume, amount = excluded.amount, adj_factor = excluded.adj_factor`,
     );
+    let maxDate = 0;
     for (const bar of bars) {
       stmt.run(code, bar.date, bar.open, bar.high, bar.low, bar.close, bar.volume, bar.amount, bar.adjFactor);
+      if (bar.date > maxDate) maxDate = bar.date;
+    }
+    // 维护"最新交易日"：否则下一次读它就得全表扫描
+    if (maxDate > 0) {
+      const current = this.latestTradeDate();
+      if (current === null || maxDate > current) {
+        this.latestDateMemo = maxDate;
+        this.setMeta("latest_trade_date", String(maxDate));
+      }
     }
   }
 
@@ -380,11 +390,32 @@ export class MarketStore {
     return out;
   }
 
-  /** 库内最新的交易日；空库返回 null。 */
+  /**
+   * 库内最新的交易日；空库返回 null。
+   *
+   * **不能直接 `SELECT MAX(date) FROM bars`**：`bars` 是 `WITHOUT ROWID` 且主键为
+   * `(code, date)`，裸的 `MAX(date)` 没有可用索引，只能全扫七百多万行——实测约 1.5 秒，
+   * 而它每次请求（包括**缓存命中**）都要调用一次，等于把缓存的意义抹掉。
+   * 改为读元数据，并在写入更晚的 bar 时就地维护；老库缺这项元数据时回退一次全扫并补上。
+   */
   latestTradeDate(): number | null {
-    const row = this.prepare("SELECT MAX(date) AS d FROM bars").get() as RawBar | undefined;
-    return row?.d ?? null;
+    if (this.latestDateMemo === undefined) {
+      const meta = this.getMeta("latest_trade_date");
+      if (meta !== null && /^\d{8}$/.test(meta)) {
+        this.latestDateMemo = Number(meta);
+      } else {
+        const row = this.prepare("SELECT MAX(date) AS d FROM bars").get() as RawBar | undefined;
+        this.latestDateMemo = row?.d ?? null;
+        if (this.latestDateMemo !== null) {
+          this.setMeta("latest_trade_date", String(this.latestDateMemo));
+        }
+      }
+    }
+    return this.latestDateMemo;
   }
+
+  /** `latestTradeDate` 的记忆值：`undefined` 表示尚未解析。 */
+  private latestDateMemo: number | null | undefined = undefined;
 
   setMeta(key: string, value: string): void {
     this.prepare(

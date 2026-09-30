@@ -409,6 +409,20 @@ const screenBody = {
   ],
   inactiveRules: [],
   degraded: { llmReview: true, reason: "大模型复核尚未接入，当前结果全部来自确定性规则" },
+  fromCache: false,
+  increment: {
+    ran: false,
+    failed: false,
+    error: null,
+    snapshotDate: null,
+    barsWritten: 0,
+    barsRefreshed: 0,
+    exDividends: 0,
+    namesUpdated: 0,
+    marketCapsUpdated: 0,
+    skippedTotal: 0,
+    durationMs: 0,
+  },
 };
 
 describe("顶部模式切换与筛选器联通（#16）", () => {

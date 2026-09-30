@@ -4,6 +4,8 @@ import { dataRoutes } from "./routes/data.js";
 import { analyzeRoutes } from "./routes/analyze.js";
 import { fundamentalsRoutes } from "./routes/fundamentals.js";
 import { screenerRoutes, type ScreenerRouteDeps } from "./routes/screener.js";
+import type { ScreenResponse } from "./screener/response.js";
+import { runIncrement } from "./market/increment.js";
 import { DEFAULT_MODEL, createDeepSeekChat, type ChatFn } from "./analysis/llm.js";
 import type { CachedAnalysis } from "./analysis/index.js";
 import { PromptCache } from "./cache.js";
@@ -21,6 +23,8 @@ export type BuildAppOptions = {
   rateLimit?: RateLimitOptions;
   /** 筛选路由依赖：测试注入临时日K库与固定时钟 */
   screener?: ScreenerRouteDeps;
+  /** 筛选结果缓存 TTL（毫秒）；默认 6 小时，可用 SCREEN_CACHE_TTL_MS 覆盖 */
+  screenCacheTtlMs?: number;
 };
 
 /**
@@ -53,10 +57,26 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerRateLimit(app, options.rateLimit ?? rateLimitFromEnv());
 
+  // 筛选结果缓存：键含数据指纹，因此"数据一变就失效"；TTL 只是兜底的上界。
+  // 全市场遍历约 5 秒且每次重读七百多万行，同一天同一组参数没有理由再算一遍。
+  const screenCacheTtlMs =
+    options.screenCacheTtlMs ?? Number(process.env.SCREEN_CACHE_TTL_MS ?? 6 * 60 * 60 * 1000);
+  const screenCache = new PromptCache<{ response: ScreenResponse }>(
+    Number.isFinite(screenCacheTtlMs) && screenCacheTtlMs > 0 ? screenCacheTtlMs : 6 * 60 * 60 * 1000,
+    200,
+  );
+
   app.register(dataRoutes);
   app.register(fundamentalsRoutes);
   app.register(async (instance) => analyzeRoutes(instance, { chat, model, cache }));
-  app.register(async (instance) => screenerRoutes(instance, options.screener ?? {}));
+  app.register(async (instance) =>
+    screenerRoutes(instance, {
+      // 生产走真实增量；测试必须显式注入假实现（类型上也是必填）
+      runIncrement,
+      cache: screenCache,
+      ...(options.screener ?? {}),
+    }),
+  );
 
   // 统一错误形状：{ status, code, message }
   app.setErrorHandler((err: FastifyError, _req, reply) => {

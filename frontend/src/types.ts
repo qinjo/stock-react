@@ -318,4 +318,26 @@ export type ScreenResponse = {
   inactiveRules: string[];
   /** `llmReview: true` 表示本次结果未经大模型复核（降级） */
   degraded: { llmReview: boolean; reason: string | null };
+  /** 本次结果直接来自当日缓存（零额外计算） */
+  fromCache: boolean;
+  /** 惰性刷新的执行情况：库落后时后端会先补当日行情再筛 */
+  increment: IncrementSummary;
+};
+
+/** 惰性刷新（每日增量）的执行摘要。 */
+export type IncrementSummary = {
+  /** 是否真的尝试了增量 */
+  ran: boolean;
+  /** 增量失败：此时仍用库内既有数据出结果，必须在界面上如实标注 */
+  failed: boolean;
+  error: string | null;
+  /** 快照所属交易日 */
+  snapshotDate: number | null;
+  barsWritten: number;
+  barsRefreshed: number;
+  exDividends: number;
+  namesUpdated: number;
+  marketCapsUpdated: number;
+  skippedTotal: number;
+  durationMs: number;
 };

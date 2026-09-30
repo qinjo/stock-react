@@ -8,6 +8,25 @@ import { MarketStore, type BarRow } from "../src/market/store.js";
 import type { Board } from "../src/market/qlib.js";
 import type { SecurityInput } from "../src/screener/types.js";
 import { goodSecurity, resetDates } from "./helpers/screener-fixtures.js";
+import type { IncrementStats } from "../src/market/increment.js";
+
+/** 假增量：本测试的文件绝不触网；需要断言的用例再包一层 spy。 */
+const noopStats = (): IncrementStats => ({
+  snapshotDate: null,
+  previousLatestDate: null,
+  symbolsRequested: 0,
+  rowsReturned: 0,
+  requests: 0,
+  barsWritten: 0,
+  barsRefreshed: 0,
+  exDividends: 0,
+  skipped: {},
+  namesUpdated: 0,
+  marketCapsUpdated: 0,
+  indexBarsWritten: 0,
+  calendarDates: 0,
+  notes: [],
+});
 
 /**
  * 筛选端点的契约测试：走 `app.inject()`，不占端口、不触网。
@@ -60,6 +79,7 @@ function app() {
   return buildApp({
     screener: {
       openStore: () => new MarketStore(dbPath),
+      runIncrement: async () => noopStats(),
       now: () => NOW,
     },
   });
@@ -191,7 +211,10 @@ describe("GET /api/screen 错误契约", () => {
 
   it("库文件不存在时返回 503 DATA_NOT_READY，并给出可操作提示", async () => {
     const missing = buildApp({
-      screener: { openStore: () => openMarketStore(join(dir, "不存在.sqlite")) },
+      screener: {
+        openStore: () => openMarketStore(join(dir, "不存在.sqlite")),
+        runIncrement: async () => noopStats(),
+      },
     });
     const res = await missing.inject({ method: "GET", url: "/api/screen" });
     expect(res.statusCode).toBe(503);
@@ -207,7 +230,9 @@ describe("GET /api/screen 错误契约", () => {
     empty.migrate();
     empty.close();
 
-    const emptyApp = buildApp({ screener: { openStore: () => new MarketStore(emptyPath) } });
+    const emptyApp = buildApp({
+      screener: { openStore: () => new MarketStore(emptyPath), runIncrement: async () => noopStats() },
+    });
     const res = await emptyApp.inject({ method: "GET", url: "/api/screen" });
     expect(res.statusCode).toBe(503);
     expect(res.json().code).toBe("DATA_NOT_READY");
@@ -231,7 +256,9 @@ describe("GET /api/screen 错误契约", () => {
     );
     store.close();
 
-    const strictApp = buildApp({ screener: { openStore: () => new MarketStore(strictPath) } });
+    const strictApp = buildApp({
+      screener: { openStore: () => new MarketStore(strictPath), runIncrement: async () => noopStats() },
+    });
     const res = await strictApp.inject({ method: "GET", url: "/api/screen" });
     expect(res.statusCode).toBe(200);
     const body = res.json();

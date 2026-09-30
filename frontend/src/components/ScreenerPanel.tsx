@@ -57,6 +57,12 @@ const pct = (v: number | null, digits = 1): string =>
 const money = (v: number | null): string =>
   v === null || !Number.isFinite(v) ? "—" : `${(v / 1e8).toFixed(2)}亿`;
 
+const formatDateKey = (key: number | null): string => {
+  if (key === null) return "—";
+  const text = String(key);
+  return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+};
+
 const price = (v: number | null): string =>
   v === null || !Number.isFinite(v) ? "—" : v.toFixed(2);
 
@@ -248,7 +254,24 @@ function ResultView({
         <p className="mt-2 text-xs text-slate-500">
           漏斗：全市场 {funnel.universe} → 排除池 {funnel.afterExclusions} → 硬门槛{" "}
           {funnel.afterHardFilters} → 基础池 {funnel.shortlisted}
+          {data.fromCache && <span className="ml-2 text-slate-400">· 来自当日缓存</span>}
         </p>
+
+        {data.increment.ran && !data.increment.failed && (
+          <p className="mt-2 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-800">
+            已自动补齐当日行情：快照 {formatDateKey(data.increment.snapshotDate)}，
+            写入 {data.increment.barsWritten} 只
+            {data.increment.exDividends > 0 && `（其中 ${data.increment.exDividends} 只除权已修正复权因子）`}
+            {data.increment.namesUpdated > 0 && `，回填名称 ${data.increment.namesUpdated} 只`}
+          </p>
+        )}
+
+        {data.increment.failed && (
+          <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            ⚠ 当日行情补齐失败，以下结果基于库内已有数据（可能不是最新交易日）：
+            {data.increment.error ?? "未知原因"}
+          </p>
+        )}
 
         {data.degraded.llmReview && (
           <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500">

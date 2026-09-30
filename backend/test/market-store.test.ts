@@ -106,6 +106,29 @@ describe("bars 读写", () => {
   it("空库的 latestTradeDate 为 null", () => {
     expect(store.latestTradeDate()).toBeNull();
   });
+
+  it("latestTradeDate 由元数据维护：写入更晚的 bar 时同步推进", () => {
+    // 直接 MAX(date) 在 WITHOUT ROWID 的 (code,date) 主键上是全表扫描，
+    // 因此它必须走元数据；元数据一旦落后，增量就会误判"库已是最新"
+    store.insertBars("600519", [bar(20260928, 1), bar(20260929, 2)]);
+    expect(store.latestTradeDate()).toBe(20260929);
+
+    store.insertBars("000001", [bar(20260930, 3)]);
+    expect(store.latestTradeDate()).toBe(20260930);
+
+    // 写入更早的 bar 不应把"最新交易日"往回拉
+    store.insertBars("000001", [bar(20260920, 4)]);
+    expect(store.latestTradeDate()).toBe(20260930);
+  });
+
+  it("重开连接后 latestTradeDate 仍正确（元数据持久化，不是内存假象）", () => {
+    store.insertBars("600519", [bar(20260929, 1)]);
+    store.close();
+
+    const reopened = new MarketStore(dbPath);
+    expect(reopened.latestTradeDate()).toBe(20260929);
+    reopened.close();
+  });
 });
 
 describe("index_bars 读写", () => {

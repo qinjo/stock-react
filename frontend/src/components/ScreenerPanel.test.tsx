@@ -56,6 +56,20 @@ const success: ScreenResponse = {
   candidates: [candidate],
   inactiveRules: ["E-st", "U-marketCap"],
   degraded: { llmReview: true, reason: "大模型复核尚未接入，当前结果全部来自确定性规则" },
+  fromCache: false,
+  increment: {
+    ran: false,
+    failed: false,
+    error: null,
+    snapshotDate: null,
+    barsWritten: 0,
+    barsRefreshed: 0,
+    exDividends: 0,
+    namesUpdated: 0,
+    marketCapsUpdated: 0,
+    skippedTotal: 0,
+    durationMs: 0,
+  },
 };
 
 type Stub =
@@ -172,6 +186,61 @@ describe("ScreenerPanel 结果呈现", () => {
     expect(await screen.findByText(/不构成任何投资建议/)).toBeInTheDocument();
     expect(screen.getByText(/牛市 50%、熊市 30%/)).toBeInTheDocument();
     expect(screen.getByText(/规则生成，非投资建议/)).toBeInTheDocument();
+  });
+
+  it("命中当日缓存时标注，避免用户以为又算了一遍", async () => {
+    stubFetch({ ok: true, body: { ...success, fromCache: true } });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    expect(await screen.findByText(/来自当日缓存/)).toBeInTheDocument();
+  });
+
+  it("后端自动补齐当日行情后，把补齐结果告诉用户", async () => {
+    stubFetch({
+      ok: true,
+      body: {
+        ...success,
+        increment: {
+          ...success.increment,
+          ran: true,
+          snapshotDate: 20260930,
+          barsWritten: 5556,
+          exDividends: 42,
+          namesUpdated: 5556,
+        },
+      },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    const notice = await screen.findByText(/已自动补齐当日行情/);
+    expect(notice).toBeInTheDocument();
+    expect(notice.textContent).toContain("2026-09-30");
+    expect(notice.textContent).toContain("5556");
+    expect(notice.textContent).toContain("42 只除权");
+  });
+
+  it("补齐失败时如实告警：结果可能不是最新交易日", async () => {
+    stubFetch({
+      ok: true,
+      body: {
+        ...success,
+        increment: {
+          ...success.increment,
+          ran: true,
+          failed: true,
+          error: "腾讯批量快照请求失败：HTTP 502",
+        },
+      },
+    });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+
+    const alert = await screen.findByText(/当日行情补齐失败/);
+    expect(alert.textContent).toContain("502");
+    // 但候选仍然展示出来（本地数据还在）
+    expect(screen.getByText("贵州茅台")).toBeInTheDocument();
   });
 
   it("未接入大模型复核时显式标注，而不是让界面以为已复核", async () => {
