@@ -8,7 +8,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "== 推送提交 =="
-git push
+# 推送与关票是两件独立的事：token 可能只有 Issues 权限而没有 Contents 权限，
+# 那种情况下不该因为推不了就把 17 次关票一并放弃。
+if [ "${SKIP_PUSH:-0}" = "1" ]; then
+  echo "  （SKIP_PUSH=1，跳过推送）"
+elif git push 2>&1; then
+  echo "  ✓ 已推送"
+else
+  echo "  ⚠ 推送失败（凭据可能缺 Contents 写权限）——继续补记与关闭工单，但代码尚未上远端"
+  PUSH_FAILED=1
+fi
 
 echo ""
 echo "== 关闭工单 #11（本地日K库与一次性 bootstrap）=="
@@ -719,3 +728,6 @@ ISSUE
 
 echo ""
 echo "== 完成：17 张工单已关闭 =="
+if [ "${PUSH_FAILED:-0}" = "1" ]; then
+  echo "⚠ 提醒：代码仍未推送到远端（本次只完成了工单补记与关闭）"
+fi
