@@ -115,12 +115,23 @@ describe("resolveAdjustFactor", () => {
     if (decision.kind === "unknown") expect(decision.reason).toContain("不相邻");
   });
 
-  it("价格不可用时同样不判定", () => {
+  it("价格不可用时同样不判定，并在原因里说清是哪一边不可用", () => {
+    const decision = resolveAdjustFactor({
+      lastRawClose: 0,
+      lastAdjFactor: 1,
+      snapshotPrevClose: 11,
+      adjacentTradingDay: true,
+    });
+    expect(decision.kind).toBe("unknown");
+    expect(decision.adjFactor).toBe(1); // 关键：沿用旧因子，绝不按不可用的数去放大
+    if (decision.kind === "unknown") expect(decision.reason).toContain("昨收或库内收盘不可用");
+
+    // 另一侧不可用（快照昨收为 0）走同一分支
     expect(
       resolveAdjustFactor({
-        lastRawClose: 0,
+        lastRawClose: 10,
         lastAdjFactor: 1,
-        snapshotPrevClose: 11,
+        snapshotPrevClose: 0,
         adjacentTradingDay: true,
       }).kind,
     ).toBe("unknown");
@@ -205,6 +216,7 @@ describe("planDailyBar", () => {
     expect(noDate).toMatchObject({ action: "skip", reason: "no-trade-date" });
   });
 
+
   it("快照比库内还旧时跳过（防止把历史写回去）", () => {
     const plan = planDailyBar({
       ...base,
@@ -257,6 +269,24 @@ describe("runIncrement（临时真库 + 假快照，不触网）", () => {
     // 指数
     snapshot("sh000001", { name: "上证指数", price: 3840.83, prevClose: 3830.45 }),
   ];
+
+  it("快照里出现清单外的符号 → 计入 unknown-symbol，而不是硬塞进库", async () => {
+    // 真实场景：新上市的票会先出现在快照里，而标的清单还没更新。
+    // 这条分支此前没有任何测试走到过（用"代码产出的标签 vs 测试断言"扫出来的）。
+    const withStranger = async (): Promise<TencentSnapshot[]> => [
+      ...(await fakeSnapshot()),
+      snapshot("sz300999", { name: "清单外新股", price: 20 }),
+    ];
+    const stats = await runIncrement(
+      store,
+      { fetchSnapshot: withStranger },
+      { ensureCalendar: false },
+    );
+
+    expect(stats.skipped["unknown-symbol"]).toBe(1);
+    // 不给它写任何日线：宁可漏，也不生成一个没有标的档案的孤儿序列
+    expect(store.readBars("300999", 5)).toEqual([]);
+  });
 
   it("追加当日 bar、回填名称与市值、写指数，并如实跳过停牌", async () => {
     const stats = await runIncrement(
