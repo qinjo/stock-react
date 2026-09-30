@@ -30,17 +30,39 @@ function num(v: unknown, scale = 1): number | null {
 }
 
 /**
+ * 成交量单位归一化：**科创板（688/689）返回的是「股」，其余板块是「手」**。
+ *
+ * 这是实测出来的坑，不是文档约定：对 4 只科创板标的做
+ * `成交额 ÷ (成交量 × 100 × 现价)` 全部得到 ≈0.01（其余板块 ≈1.0），
+ * 说明科创板那一列比"手"大 100 倍。领域模型统一用「手」，所以在这里收口。
+ * 不换算的后果很隐蔽：成交额与价格都对，只有成交量差两个数量级。
+ */
+export function volumeToLots(rawVolume: number | null, symbol: string): number | null {
+  if (rawVolume === null) return null;
+  return /^(sh|SH)(688|689)/.test(symbol) ? rawVolume / 100 : rawVolume;
+}
+
+/** 从 `v_<symbol>=` 前缀取标的代码；取不到则返回空串。 */
+export function symbolFromLine(text: string): string {
+  return text.match(/^v_([a-z0-9]+)\s*=/i)?.[1]?.toLowerCase() ?? "";
+}
+
+/**
  * 归一化腾讯实时行情（qt.gtimg.cn `v_<symbol>="…~…"` 格式）。
  *
  * 字段索引经与东财 fixture 逐值对照确认（实测）：
- * 1名称 2代码 3现价 4昨收 5今开 6成交量(手) 32涨跌幅% 33最高 34最低
+ * 1名称 2代码 3现价 4昨收 5今开 6成交量 30时间戳 32涨跌幅% 33最高 34最低
  * 37成交额(万元) 38换手率% 44流通市值(亿) 45总市值(亿) 46市净率
  * 47涨停价 48跌停价 52市盈率(动)
+ *
+ * 字段个数不固定（实测北交所标的少一个），因此只按索引取用、不校验总长。
  */
 export function normalizeTencentQuote(text: string): Quote {
   const match = text.match(/="([\s\S]*?)";?\s*$/);
   const f = (match?.[1] ?? "").split("~");
   if (f.length < 53) throw new Error("腾讯行情响应字段不足");
+
+  const symbol = symbolFromLine(text);
 
   return {
     code: f[2] ?? "",
@@ -48,7 +70,7 @@ export function normalizeTencentQuote(text: string): Quote {
     price: num(f[3]),
     prevClose: num(f[4]),
     open: num(f[5]),
-    volume: num(f[6]),
+    volume: volumeToLots(num(f[6]), symbol),
     changePercent: num(f[32]),
     high: num(f[33]),
     low: num(f[34]),
@@ -62,6 +84,46 @@ export function normalizeTencentQuote(text: string): Quote {
     limitDown: num(f[48]),
     pe: num(f[52]),
   };
+}
+
+/** 批量快照中的一行：行情 + 该行的标的符号与时间戳。 */
+export type TencentSnapshot = {
+  /** `sh600519` 形式的小写符号 */
+  symbol: string;
+  quote: Quote;
+  /** 字段 30：`YYYYMMDDHHMMSS`；解析不出为 null */
+  timestamp: string | null;
+  /** 时间戳里的交易日 `YYYYMMDD` 整数；解析不出为 null */
+  tradeDate: number | null;
+};
+
+/**
+ * 归一化批量快照响应（一次请求可携带数百个代码）。
+ *
+ * 单行解析失败不影响其余标的——批量接口里个别标的停牌或字段异常是常态，
+ * 让整批失败会白白浪费一次请求额度。
+ */
+export function normalizeTencentBatch(text: string): TencentSnapshot[] {
+  const out: TencentSnapshot[] = [];
+  for (const line of text.split("\n")) {
+    const symbol = symbolFromLine(line);
+    if (!symbol) continue;
+    try {
+      const quote = normalizeTencentQuote(line);
+      const raw = line.match(/="([\s\S]*?)";?\s*$/)?.[1] ?? "";
+      const timestamp = (raw.split("~")[30] ?? "").trim();
+      const valid = /^\d{14}$/.test(timestamp);
+      out.push({
+        symbol,
+        quote,
+        timestamp: valid ? timestamp : null,
+        tradeDate: valid ? Number(timestamp.slice(0, 8)) : null,
+      });
+    } catch {
+      // 跳过该行：下面按"缺失"处理，不阻塞其余标的
+    }
+  }
+  return out;
 }
 
 /**
@@ -153,6 +215,40 @@ export async function fetchTencentKline(input: string, limit = 60): Promise<Klin
   const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
   if (!res.ok) throw new Error(`腾讯K线请求失败：HTTP ${res.status}`);
   return normalizeTencentKline(await res.json(), limit);
+}
+
+/**
+ * 批量快照：一次请求携带多个代码。
+ *
+ * 分块大小取 400 而不是实测上限（请求 600 个只回 513 条）——留出余量，
+ * 避免"静默少拿"这种最难发现的失败：全市场约六千只，宁可用十余个请求换确定性。
+ * 请求之间串行且有间隔，不并发。
+ */
+export const SNAPSHOT_CHUNK_SIZE = 400;
+const SNAPSHOT_CHUNK_DELAY_MS = 300;
+
+export async function fetchTencentBatchSnapshot(
+  symbols: readonly string[],
+  options: { chunkSize?: number; delayMs?: number; signal?: AbortSignal } = {},
+): Promise<TencentSnapshot[]> {
+  const chunkSize = options.chunkSize ?? SNAPSHOT_CHUNK_SIZE;
+  const delayMs = options.delayMs ?? SNAPSHOT_CHUNK_DELAY_MS;
+  const out: TencentSnapshot[] = [];
+
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    const chunk = symbols.slice(i, i + chunkSize);
+    const res = await fetch(`${QT}/q=${chunk.join(",")}`, {
+      signal: options.signal ?? AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) throw new Error(`腾讯批量快照请求失败：HTTP ${res.status}`);
+    out.push(...normalizeTencentBatch(new TextDecoder("gbk").decode(await res.arrayBuffer())));
+
+    // 串行 + 间隔：这是全市场唯一实测无限流的通道，没有理由去压它
+    if (i + chunkSize < symbols.length && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return out;
 }
 
 export async function fetchSuggest(query: string, count = 10): Promise<SearchCandidate[]> {

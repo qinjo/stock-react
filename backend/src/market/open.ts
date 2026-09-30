@@ -29,5 +29,8 @@ export function defaultMarketDbPath(): string {
 /** 打开已存在的库；不存在则抛 `MarketDataNotReadyError`（路由映射为 DATA_NOT_READY）。 */
 export function openMarketStore(path = defaultMarketDbPath()): MarketStore {
   if (!existsSync(path)) throw new MarketDataNotReadyError(path);
-  return new MarketStore(path);
+  const store = new MarketStore(path);
+  // 幂等建表 + 补列：库是上一次 bootstrap 留下的产物，可能比当前 schema 旧
+  store.migrate();
+  return store;
 }

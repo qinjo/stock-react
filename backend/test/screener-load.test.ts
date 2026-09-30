@@ -92,6 +92,17 @@ describe("loadUniverseFromStore", () => {
     expect(growthOnly.map((s) => s.code)).toEqual(["300750"]);
   });
 
+  it("按库内最新交易日标记当天是否有成交（停牌股会被识别出来）", () => {
+    store.upsertInstruments([instrument("000001"), instrument("000002")]);
+    // 000001 更新到 09-30，000002 停在 09-29（当日停牌）
+    store.insertBars("000001", [bar(20260929, 10), bar(20260930, 10.5)]);
+    store.insertBars("000002", [bar(20260929, 20)]);
+
+    const loaded = new Map([...loadUniverseFromStore(store)].map((s) => [s.code, s]));
+    expect(loaded.get("000001")?.tradedOnLatestDay).toBe(true);
+    expect(loaded.get("000002")?.tradedOnLatestDay).toBe(false);
+  });
+
   it("空库产出空流，不抛错", () => {
     expect([...loadUniverseFromStore(store)]).toEqual([]);
   });

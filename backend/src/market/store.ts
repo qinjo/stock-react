@@ -12,7 +12,7 @@ import type { Board, Market } from "./qlib.js";
  * - 该库是**可再生的构建产物**，不进版本库。
  */
 
-export const SCHEMA_VERSION = "1";
+export const SCHEMA_VERSION = "2";
 
 export type InstrumentRow = {
   code: string;
@@ -26,6 +26,8 @@ export type InstrumentRow = {
   listedEnd: number;
   /** 截止日等于库内最新交易日 → 仍在交易 */
   isLive: boolean;
+  /** 最新流通市值（元）；未接过行情快照时为 null */
+  floatMarketCap?: number | null;
 };
 
 export type BarRow = {
@@ -49,16 +51,25 @@ export type IndexBarRow = Omit<BarRow, "amount" | "adjFactor">;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS instruments (
-  code         TEXT PRIMARY KEY,
-  market       TEXT NOT NULL,
-  board        TEXT NOT NULL,
-  name         TEXT,
-  listed_start INTEGER NOT NULL,
-  listed_end   INTEGER NOT NULL,
-  is_live      INTEGER NOT NULL
+  code             TEXT PRIMARY KEY,
+  market           TEXT NOT NULL,
+  board            TEXT NOT NULL,
+  name             TEXT,
+  listed_start     INTEGER NOT NULL,
+  listed_end       INTEGER NOT NULL,
+  is_live          INTEGER NOT NULL,
+  -- 最新流通市值（元）：来自行情快照，随每日增量刷新。
+  -- 它是时点属性，筛选器的市值闸门只关心"现在"，故不按日期存历史。
+  float_market_cap REAL
 );
 CREATE INDEX IF NOT EXISTS idx_instruments_board ON instruments(board);
 CREATE INDEX IF NOT EXISTS idx_instruments_live  ON instruments(is_live);
+
+-- 交易日历：来自指数日线（真实交易日，不需要猜节假日）。
+-- 两个用途：判定"库内最新日"与"快照日"是否相邻（除权检测的前提），以及大盘门的日序。
+CREATE TABLE IF NOT EXISTS trading_calendar (
+  date INTEGER PRIMARY KEY
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS bars (
   code       TEXT    NOT NULL,
@@ -111,10 +122,24 @@ export class MarketStore {
     this.db = new DatabaseSync(path);
   }
 
-  /** 建表（幂等）。 */
+  /**
+   * 建表（幂等）。
+   *
+   * 除了 `CREATE TABLE IF NOT EXISTS`，还要处理**已存在的库**的加列：
+   * 库是 644 MB 的构建产物，为了加一列让用户重新下载 541 MB 的归档并不划算。
+   */
   migrate(): void {
     this.db.exec(SCHEMA);
+    this.addColumnIfMissing("instruments", "float_market_cap", "REAL");
     this.setMeta("schema_version", SCHEMA_VERSION);
+  }
+
+  private addColumnIfMissing(table: string, column: string, type: string): void {
+    const existing = this.db.prepare(`PRAGMA table_info(${table})`).all() as unknown as Array<{
+      name: string;
+    }>;
+    if (existing.some((row) => row.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
 
   /**
@@ -174,14 +199,16 @@ export class MarketStore {
 
   upsertInstruments(rows: readonly InstrumentRow[]): void {
     const stmt = this.prepare(
-      `INSERT INTO instruments (code, market, board, name, listed_start, listed_end, is_live)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO instruments (code, market, board, name, listed_start, listed_end, is_live, float_market_cap)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(code) DO UPDATE SET
          market = excluded.market, board = excluded.board,
          name = COALESCE(excluded.name, instruments.name),
          listed_start = MIN(excluded.listed_start, instruments.listed_start),
          listed_end = MAX(excluded.listed_end, instruments.listed_end),
-         is_live = excluded.is_live`,
+         is_live = excluded.is_live,
+         -- 市值只在有新值时覆盖，避免一次没有快照的写入把已有值抹掉
+         float_market_cap = COALESCE(excluded.float_market_cap, instruments.float_market_cap)`,
     );
     for (const row of rows) {
       stmt.run(
@@ -192,6 +219,7 @@ export class MarketStore {
         row.listedStart,
         row.listedEnd,
         row.isLive ? 1 : 0,
+        row.floatMarketCap ?? null,
       );
     }
   }
@@ -203,15 +231,58 @@ export class MarketStore {
   listInstruments(): InstrumentRow[] {
     const rows = this.prepare(
       `SELECT code, market, board, name,
-              listed_start AS listedStart, listed_end AS listedEnd, is_live AS isLive
+              listed_start AS listedStart, listed_end AS listedEnd, is_live AS isLive,
+              float_market_cap AS floatMarketCap
        FROM instruments ORDER BY code`,
     ).all() as unknown as Array<Omit<InstrumentRow, "isLive"> & { isLive: number }>;
     return rows.map((row) => ({ ...row, isLive: row.isLive === 1 }));
   }
 
+  /**
+   * 写入交易日历（幂等）。日历来自指数日线，因此是**真实交易日**，
+   * 不需要在代码里猜周末与节假日。
+   */
+  insertCalendarDates(dates: readonly number[]): void {
+    const stmt = this.prepare("INSERT OR IGNORE INTO trading_calendar (date) VALUES (?)");
+    for (const date of dates) stmt.run(date);
+  }
+
+  /** 日历中 `date` 之后的下一个交易日；没有记录则 null。 */
+  nextTradingDate(date: number): number | null {
+    const row = this.prepare("SELECT MIN(date) AS d FROM trading_calendar WHERE date > ?").get(
+      date,
+    ) as RawBar | undefined;
+    return row?.d ?? null;
+  }
+
+  /** 日历覆盖范围；空日历返回 null。 */
+  calendarRange(): { from: number; to: number } | null {
+    const row = this.prepare(
+      "SELECT MIN(date) AS fromDate, MAX(date) AS toDate FROM trading_calendar",
+    ).get() as { fromDate: number | null; toDate: number | null } | undefined;
+    if (!row || row.fromDate === null || row.toDate === null) return null;
+    return { from: row.fromDate, to: row.toDate };
+  }
+
+  /**
+   * 批量刷新标的的快照派生字段（名称、流通市值）。
+   * 用 COALESCE 语义：快照里拿不到名称时保留库内已有的，不把已有值抹成空。
+   */
+  updateInstrumentSnapshots(
+    rows: ReadonlyArray<{ code: string; name: string | null; floatMarketCap: number | null }>,
+  ): void {
+    const stmt = this.prepare(
+      `UPDATE instruments
+       SET name = COALESCE(?, name), float_market_cap = COALESCE(?, float_market_cap)
+       WHERE code = ?`,
+    );
+    for (const row of rows) stmt.run(row.name, row.floatMarketCap, row.code);
+  }
+
   readInstrument(code: string): InstrumentRow | null {    const row = this.prepare(
       `SELECT code, market, board, name,
-              listed_start AS listedStart, listed_end AS listedEnd, is_live AS isLive
+              listed_start AS listedStart, listed_end AS listedEnd, is_live AS isLive,
+              float_market_cap AS floatMarketCap
        FROM instruments WHERE code = ?`,
     ).get(code) as (Omit<InstrumentRow, "isLive"> & { isLive: number }) | undefined;
     if (!row) return null;

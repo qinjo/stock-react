@@ -7,7 +7,7 @@ import { openMarketStore } from "../src/market/open.js";
 import { MarketStore, type BarRow } from "../src/market/store.js";
 import type { Board } from "../src/market/qlib.js";
 import type { SecurityInput } from "../src/screener/types.js";
-import { goodSecurity } from "./helpers/screener-fixtures.js";
+import { goodSecurity, resetDates } from "./helpers/screener-fixtures.js";
 
 /**
  * 筛选端点的契约测试：走 `app.inject()`，不占端口、不触网。
@@ -40,8 +40,13 @@ beforeAll(() => {
   dbPath = join(dir, "kline.sqlite");
   const store = new MarketStore(dbPath);
   store.migrate();
+  // 三只标的必须共用同一条时间轴：否则"全市场最新交易日"只对得上其中一只，
+  // 其余会被「当日停牌」规则剔除，测的就不是想测的东西了
+  resetDates();
   seed(store, goodSecurity({ code: "000001" }), "main", "平安银行");
+  resetDates();
   seed(store, goodSecurity({ code: "300750" }), "growth", "宁德时代");
+  resetDates();
   seed(store, goodSecurity({ code: "920002" }), "bj", "万达轴承");
   latestDateKey = store.latestTradeDate() as number;
   store.close();
@@ -214,6 +219,7 @@ describe("GET /api/screen 错误契约", () => {
     const store = new MarketStore(strictPath);
     store.migrate();
     // 一根日线都没有的标的会被适配层跳过；这里种一只跌破 MA100 的票，规则层把它筛掉
+    resetDates();
     seed(
       store,
       goodSecurity({

@@ -16,17 +16,22 @@ export function* loadUniverseFromStore(
   options: { barsLimit?: number; codeFilter?: (row: ReturnType<MarketStore["listInstruments"]>[number]) => boolean } = {},
 ): Generator<SecurityInput> {
   const barsLimit = options.barsLimit ?? 260;
+  const latestTradeDate = store.latestTradeDate();
 
   for (const row of store.listInstruments()) {
     if (options.codeFilter && !options.codeFilter(row)) continue;
     const bars = store.readBars(row.code, barsLimit);
     if (bars.length === 0) continue;
+    const lastBarDate = (bars[bars.length - 1] as { date: number }).date;
     yield {
       code: row.code,
       name: row.name,
       board: row.board,
       isLive: row.isLive,
-      floatMarketCap: null,
+      // 市值来自行情快照（每日增量刷新）；未接过快照时为 null，
+      // 引擎会把市值闸门标为"未生效"并如实上报，而不是假装它开着
+      floatMarketCap: row.floatMarketCap ?? null,
+      tradedOnLatestDay: latestTradeDate !== null && lastBarDate === latestTradeDate,
       bars,
     };
   }

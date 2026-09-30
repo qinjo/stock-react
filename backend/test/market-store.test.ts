@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MarketStore, type BarRow, type InstrumentRow } from "../src/market/store.js";
+import { MarketStore, SCHEMA_VERSION, type BarRow, type InstrumentRow } from "../src/market/store.js";
 
 /**
  * 库的测试用**临时文件里的真 SQLite**，不用内存库也不用 mock：
@@ -212,6 +212,6 @@ describe("meta", () => {
   });
 
   it("migrate 会写入 schema_version", () => {
-    expect(store.getMeta("schema_version")).toBe("1");
+    expect(store.getMeta("schema_version")).toBe(SCHEMA_VERSION);
   });
 });

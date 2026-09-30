@@ -106,6 +106,17 @@ export const RULES: readonly Rule[] = [
     },
   },
   {
+    id: "E-suspended-today",
+    label: "剔除当日停牌（最后一根不在最新交易日）",
+    stage: "exclusions",
+    source: "offbook",
+    evaluate: ({ security, bars }) => {
+      if (security.tradedOnLatestDay) return ok("最新交易日有成交");
+      const last = bars[bars.length - 1];
+      return fail(`最新交易日无日线，最近一根为 ${last?.date ?? "无"}`);
+    },
+  },
+  {
     id: "E-oneword",
     label: "剔除一字板",
     stage: "exclusions",

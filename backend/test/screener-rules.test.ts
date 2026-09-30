@@ -49,6 +49,16 @@ describe("硬性排除层", () => {
     expect(run("E-suspended", withLastBar(goodSecurity(), { volume: 0 })).ok).toBe(false);
   });
 
+  it("E-suspended-today：最后一根不在全市场最新交易日即淘汰", () => {
+    expect(run("E-suspended-today", goodSecurity()).ok).toBe(true);
+
+    // 增量会把当天 bar 补进全市场，但停牌股补不上——只看"最后一根有没有成交量"拦不住它
+    const stale = goodSecurity({ tradedOnLatestDay: false });
+    const outcome = run("E-suspended-today", stale);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("最新交易日无日线");
+  });
+
   it("E-oneword：一字板买不到，淘汰", () => {
     expect(run("E-oneword", goodSecurity()).ok).toBe(true);
     const oneWord = withLastBar(goodSecurity(), { high: 20, low: 20 });

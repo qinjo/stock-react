@@ -71,6 +71,7 @@ export function goodSecurity(over: Partial<SecurityInput> = {}): SecurityInput {
     board: "main",
     isLive: true,
     floatMarketCap: 40e8,
+    tradedOnLatestDay: true,
     bars: bars(rising(300)),
     ...over,
   };

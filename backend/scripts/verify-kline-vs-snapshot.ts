@@ -133,16 +133,27 @@ function checkVwapConsistency(
   store: MarketStore,
   date: number,
   sampleSize: number,
-): { checked: number; failures: Array<{ code: string; vwap: number; low: number; high: number }> } {
+): {
+  checked: number;
+  degenerate: number;
+  failures: Array<{ code: string; vwap: number; low: number; high: number }>;
+} {
   const codes = store.sampleLiveCodes(sampleSize);
   const failures: Array<{ code: string; vwap: number; low: number; high: number }> = [];
   let checked = 0;
+  let degenerate = 0;
 
   for (const code of codes) {
     const bars = store.readBars(code, 1);
     const bar = bars[0];
     if (!bar || bar.date !== date) continue;
     if (bar.volume <= 0 || bar.amount <= 0) continue; // 停牌等无成交情形不参与
+    // 一字板（最高=最低）没有区间可校验：实测这类标的的均价会被取整到当日唯一价位，
+    // 于是恒等式差千分之几。这是取整伪像，不是单位错误，单独计数而不计入失败。
+    if (bar.high <= bar.low) {
+      degenerate++;
+      continue;
+    }
     checked++;
 
     // 成交量单位是「手」→ 股数 = 手 × 100；VWAP 必须落回当日价格区间
@@ -152,7 +163,7 @@ function checkVwapConsistency(
       failures.push({ code, vwap, low: bar.low, high: bar.high });
     }
   }
-  return { checked, failures };
+  return { checked, degenerate, failures };
 }
 
 /** 判据二：快照昨收与库内最新收盘的跨日对账。 */
@@ -205,7 +216,9 @@ async function main(): Promise<void> {
 
     // ── 判据一
     const vwap = checkVwapConsistency(store, date, opts.sample);
-    console.log(`\n[1] VWAP 内部一致性（抽样 ${vwap.checked} 只）`);
+    console.log(
+      `\n[1] VWAP 内部一致性（抽样 ${vwap.checked} 只，另有一字板 ${vwap.degenerate} 只无区间可校验）`,
+    );
     if (vwap.failures.length === 0) {
       console.log("    ✓ 全部落在当日价格区间内（价 / 量 / 额的单位与方向自洽）");
     } else {

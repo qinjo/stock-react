@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "bootstrap:kline": "tsx scripts/bootstrap-kline.ts",
     "verify:kline": "tsx scripts/verify-kline-vs-snapshot.ts",
-    "screen:preview": "tsx scripts/preview-screen.ts"
+    "screen:preview": "tsx scripts/preview-screen.ts",
+    "update:kline": "tsx scripts/update-kline.ts"
   },
   "dependencies": {
     "fastify": "^5.12.1",

@@ -3,10 +3,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  normalizeTencentBatch,
   normalizeTencentKline,
   normalizeTencentQuote,
   normalizeTencentSuggest,
   secidToTencentSymbol,
+  volumeToLots,
 } from "../src/tencent.js";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -123,5 +125,91 @@ describe("normalizeTencentSuggest", () => {
     expect(normalizeTencentSuggest('v_hint="N";')).toEqual([]);
     expect(normalizeTencentSuggest("")).toEqual([]);
     expect(normalizeTencentSuggest("garbage")).toEqual([]);
+  });
+});
+
+/* ------------------------- 批量快照与成交量单位 ------------------------- */
+
+describe("volumeToLots：科创板返回「股」、其余板块「手」", () => {
+  it("科创板除以 100 换成手", () => {
+    // 实测：4 只科创板标的的 成交额 ÷ (成交量 × 100 × 现价) 全部 ≈0.01
+    expect(volumeToLots(17334942, "sh688981")).toBeCloseTo(173349.42, 2);
+    expect(volumeToLots(1000, "sh689009")).toBeCloseTo(10, 6);
+  });
+
+  it("其他板块原样返回", () => {
+    expect(volumeToLots(26366, "sh600519")).toBe(26366);
+    expect(volumeToLots(171065, "sz300750")).toBe(171065);
+    expect(volumeToLots(15726, "bj920002")).toBe(15726);
+  });
+
+  it("空值保持 null（停牌标的）", () => {
+    expect(volumeToLots(null, "sh600519")).toBeNull();
+  });
+});
+
+describe("normalizeTencentBatch", () => {
+  const rows = normalizeTencentBatch(loadGbk("snapshot-batch.tencent.gbk"));
+
+  it("逐行解析，覆盖沪深主板 / 创业板 / 科创板 / 北交所 / 指数", () => {
+    expect(rows.map((r) => r.symbol)).toEqual([
+      "sh600519",
+      "sz000001",
+      "sz300750",
+      "sh688981",
+      "bj920002",
+      "sh601398",
+      "sh000001",
+      "sz399006",
+    ]);
+  });
+
+  it("取出时间戳与交易日", () => {
+    const maotai = rows[0]!;
+    expect(maotai.timestamp).toMatch(/^\d{14}$/);
+    expect(maotai.tradeDate).toBe(Number(maotai.timestamp!.slice(0, 8)));
+  });
+
+  it("科创板成交量已换成手，与成交额自洽", () => {
+    const star = rows.find((r) => r.symbol === "sh688981")!;
+    const { volume, amount, price } = star.quote;
+    // 成交额 ≈ 手 × 100 × 均价：不换算的话这里会差两个数量级
+    const ratio = (amount as number) / ((volume as number) * 100 * (price as number));
+    expect(ratio).toBeGreaterThan(0.9);
+    expect(ratio).toBeLessThan(1.1);
+  });
+
+  it("主板成交量本就是手，同样自洽", () => {
+    const main = rows.find((r) => r.symbol === "sh600519")!;
+    const ratio = (main.quote.amount as number) / ((main.quote.volume as number) * 100 * (main.quote.price as number));
+    expect(ratio).toBeGreaterThan(0.9);
+    expect(ratio).toBeLessThan(1.1);
+  });
+
+  it("字段个数不固定（北交所实测少一个）也能解析", () => {
+    const bj = rows.find((r) => r.symbol === "bj920002")!;
+    expect(bj.quote.name).toBe("万达轴承");
+    expect(bj.quote.price).toBeGreaterThan(0);
+    expect(bj.tradeDate).not.toBeNull();
+  });
+
+  it("单位换算：成交额万元→元、市值亿元→元", () => {
+    const maotai = rows[0]!;
+    expect(maotai.quote.amount).toBeGreaterThan(1e8); // 十几亿
+    expect(maotai.quote.floatMarketCap).toBeGreaterThan(1e10); // 万亿级
+  });
+
+  it("单行异常不影响其余标的（批量里个别停牌是常态）", () => {
+    const text = [
+      'v_sh600519="1~贵州茅台~600519~1235.58~1243.88~1244.60~26366~',
+      "x",
+      'v_sz000001="1~平安银行~000001~11.35~11.30~11.31~385367~0~0~11.35~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~20260930113954~0.05~0.44~11.41~11.28~11.35/385367/441430000~385367~44143~1.99~0.21~5.07~~11.41~11.28~1.14~2229.71~2229.71~0.47~12.41~10.17~0.94~-8~6~";',
+    ].join("\n");
+    const parsed = normalizeTencentBatch(text);
+    expect(parsed.map((r) => r.symbol)).toEqual(["sz000001"]);
+  });
+
+  it("空响应返回空数组，不抛错", () => {
+    expect(normalizeTencentBatch("")).toEqual([]);
   });
 });
