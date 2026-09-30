@@ -428,3 +428,29 @@ describe("GET /api/screen 的大模型复核", () => {
     expect(res.json().degraded.reason).toContain("未配置大模型密钥");
   });
 });
+
+/* ------------------ 半成品库也要给「可操作的指引」(#49) ------------------ */
+
+describe("GET /api/screen 在半成品库上的行为", () => {
+  it("库存在但 bootstrap 没跑完 → DATA_NOT_READY，而不是空结果或 500", async () => {
+    const { MarketStore } = await import("../src/market/store.js");
+    const path = join(dir, "partial.sqlite");
+    const store = new MarketStore(path);
+    store.migrate();
+    store.upsertInstruments([
+      { code: "600519", market: "sh", board: "main", name: null, listedStart: 20200101, listedEnd: 20260929, isLive: true },
+    ]);
+    // 关键：不写 bootstrap_at —— 模拟"删库之后、重建完成之前"中断
+    store.close();
+
+    const partialApp = buildApp({
+      screener: { openStore: () => new MarketStore(path), runIncrement: async () => noopStats() },
+    });
+    const res = await partialApp.inject({ method: "GET", url: "/api/screen" });
+
+    // 与"库不存在"同一个错误码：对用户是同一个动作（重跑 bootstrap）
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe("DATA_NOT_READY");
+    expect(res.json().message).toContain("bootstrap:kline");
+  });
+});

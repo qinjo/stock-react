@@ -3,7 +3,7 @@ import { ApiError } from "../errors.js";
 import type { Board } from "../market/qlib.js";
 import type { ChatFn } from "../analysis/llm.js";
 import type { IncrementStats } from "../market/increment.js";
-import { MarketDataNotReadyError, openMarketStore } from "../market/open.js";
+import { MarketDataIncompleteError, MarketDataNotReadyError, openMarketStore } from "../market/open.js";
 import type { MarketStore } from "../market/store.js";
 import type { PromptCache } from "../cache.js";
 import { runScreen, type IncrementSummary } from "../screener/orchestrator.js";
@@ -152,7 +152,7 @@ export async function screenerRoutes(app: FastifyInstance, deps: ScreenerRouteDe
         },
       );
     } catch (err) {
-      if (err instanceof MarketDataNotReadyError) {
+      if ((err instanceof MarketDataNotReadyError || err instanceof MarketDataIncompleteError)) {
         throw new ApiError(
           "DATA_NOT_READY",
           `${err.message}。请先运行 npm run bootstrap:kline`,
