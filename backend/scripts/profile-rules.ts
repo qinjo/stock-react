@@ -41,6 +41,14 @@ const gate = evaluateMarketGate({
 
 const rejectedBy = new Map<string, number>();
 const unknownCount = new Map<string, number>();
+/**
+ * 每条规则**走到了多少只**。
+ *
+ * 这一步是必需的：规则是分层短路的，后段规则只面对通过了前置规则的少数标的。
+ * 只看"拦下多少只"会把"分母小"误读成"阈值松"——`U-notRange` 只拦 4 只，
+ * 但若只有 6 只走到了它，那是 67% 而不是 0.07%。
+ */
+const reachedCount = new Map<string, number>();
 let total = 0;
 let passed = 0;
 
@@ -52,6 +60,7 @@ for (const security of loadUniverseFromStore(store, {
   const result = evaluateRules(ctx);
   // 到过这条规则的标的数（不管判定结果），用于区分"没触发"与"没走到"
   for (const hit of result.hits) {
+    reachedCount.set(hit.id, (reachedCount.get(hit.id) ?? 0) + 1);
     if (hit.outcome.unknown) unknownCount.set(hit.id, (unknownCount.get(hit.id) ?? 0) + 1);
   }
   if (result.passed) {
@@ -65,15 +74,25 @@ store.close();
 
 console.log(`模式 ${mode} · 严格度 ${strictness} · 大盘门 ${gate.state}`);
 console.log(`全市场 ${total} 只 → 通过基础池 ${passed} 只（${((passed / total) * 100).toFixed(1)}%）\n`);
-console.log("各规则真实拦下的数量（升序）：");
-for (const [id, n] of [...rejectedBy.entries()].sort((a, b) => a[1] - b[1])) {
-  const label = RULES.find((r) => r.id === id)?.label ?? "?";
-  const bar = "█".repeat(Math.max(1, Math.round((n / total) * 40)));
-  console.log(`  ${id.padEnd(24)} ${String(n).padStart(5)}  ${((n / total) * 100).toFixed(1).padStart(5)}%  ${bar}  ${label}`);
+// 按"走到了多少只"排序——这才是判断阈值松紧的口径
+const rows = [...reachedCount.entries()]
+  .map(([id, reached]) => ({ id, reached, rejected: rejectedBy.get(id) ?? 0 }))
+  .sort((a, b) => a.rejected / Math.max(1, a.reached) - b.rejected / Math.max(1, b.reached));
+
+console.log("各规则：走到了多少只 → 拦下多少只（按拒绝率升序）\n");
+console.log(`  ${"规则".padEnd(24)} ${"走到".padStart(6)} ${"拦下".padStart(6)} ${"拒绝率".padStart(8)}`);
+for (const r of rows) {
+  const label = RULES.find((x) => x.id === r.id)?.label ?? "?";
+  const rate = r.rejected / Math.max(1, r.reached);
+  const bar = r.rejected === 0 ? "" : "█".repeat(Math.max(1, Math.round(rate * 20)));
+  console.log(
+    `  ${r.id.padEnd(24)} ${String(r.reached).padStart(6)} ${String(r.rejected).padStart(6)} ` +
+      `${(rate * 100).toFixed(1).padStart(7)}%  ${bar} ${label}`,
+  );
 }
 
 const applicable = RULES.filter((r) => !r.modes || r.modes.includes(mode));
-const never = applicable.filter((r) => !rejectedBy.has(r.id));
+const never = applicable.filter((r) => (rejectedBy.get(r.id) ?? 0) === 0);
 console.log(`\n适用但从未拦下任何一只（${never.length} 条）：`);
 for (const rule of never) console.log(`  · ${rule.id.padEnd(24)} ${rule.label}`);
 
