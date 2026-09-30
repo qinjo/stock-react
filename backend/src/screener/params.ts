@@ -171,8 +171,9 @@ export const PARAM_PROVENANCE: Record<keyof ScreenerParams, ParamProvenance> = {
     note: "可买性约束，源书完全没有成交额阈值",
   },
   minListedBars: {
-    source: "book",
-    ref: "L2386",
+    // 不是书里的规则：L2386 讲的是"只使用均线、其他指标完全不看"，
+    // 与"日 K 根数下限"无关。这条是为指标可计算性设的工程约束。
+    source: "offbook",
     note: "MA144 需 144 根 + 缓冲；作者把均线作为唯一核心指标",
   },
   ma100BreakoutWindow: {
