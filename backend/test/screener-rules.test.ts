@@ -202,7 +202,9 @@ describe("evaluateRules 的分层短路", () => {
     const result = evaluateRules(buildContext(goodSecurity(), paramsFor("standard"), DEFAULT_CRITERIA));
     expect(result.passed).toBe(true);
     expect(result.rejectedBy).toBeNull();
-    expect(result.hits.length).toBe(RULES.length);
+    // 事件模式专属的排除条款在均线模式下不参与，因此不等于 RULES.length
+    const applicable = RULES.filter((r) => !r.modes || r.modes.includes("trend"));
+    expect(result.hits.length).toBe(applicable.length);
     expect(result.hits.every((h) => h.outcome.ok)).toBe(true);
     // 每条规则都带来源，界面才能区分"书挑的"与"我们加的"
     expect(result.hits.every((h) => h.source === "book" || h.source === "inferred" || h.source === "offbook")).toBe(true);
