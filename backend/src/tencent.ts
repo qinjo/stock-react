@@ -1,4 +1,4 @@
-import type { Kline, Quote, SearchCandidate } from "./domain.js";
+import { SourceUnavailableError, type Kline, type Quote, type SearchCandidate } from "./domain.js";
 import { resolveSecid } from "./eastmoney.js";
 
 /**
@@ -203,7 +203,7 @@ function decodeUnicodeEscapes(s: string): string {
 export async function fetchTencentQuote(input: string): Promise<Quote> {
   const symbol = secidToTencentSymbol(resolveSecid(input));
   const res = await fetch(`${QT}/q=${symbol}`, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) throw new Error(`腾讯行情请求失败：HTTP ${res.status}`);
+  if (!res.ok) throw new SourceUnavailableError(`腾讯行情请求失败：HTTP ${res.status}`);
   // 实时接口是 GBK 编码，必须显式解码
   const text = new TextDecoder("gbk").decode(await res.arrayBuffer());
   return normalizeTencentQuote(text);
@@ -213,7 +213,7 @@ export async function fetchTencentKline(input: string, limit = 60): Promise<Klin
   const symbol = secidToTencentSymbol(resolveSecid(input));
   const url = `${FQKLINE}?param=${symbol},day,,,${limit},qfq`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) throw new Error(`腾讯K线请求失败：HTTP ${res.status}`);
+  if (!res.ok) throw new SourceUnavailableError(`腾讯K线请求失败：HTTP ${res.status}`);
   return normalizeTencentKline(await res.json(), limit);
 }
 
@@ -240,7 +240,7 @@ export async function fetchTencentBatchSnapshot(
     const res = await fetch(`${QT}/q=${chunk.join(",")}`, {
       signal: options.signal ?? AbortSignal.timeout(20_000),
     });
-    if (!res.ok) throw new Error(`腾讯批量快照请求失败：HTTP ${res.status}`);
+    if (!res.ok) throw new SourceUnavailableError(`腾讯批量快照请求失败：HTTP ${res.status}`);
     out.push(...normalizeTencentBatch(new TextDecoder("gbk").decode(await res.arrayBuffer())));
 
     // 串行 + 间隔：这是全市场唯一实测无限流的通道，没有理由去压它
@@ -256,6 +256,6 @@ export async function fetchSuggest(query: string, count = 10): Promise<SearchCan
   if (!q) return [];
   const url = `${SMARTBOX}?q=${encodeURIComponent(q)}&t=all`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) throw new Error(`数据源请求失败：HTTP ${res.status}`);
+  if (!res.ok) throw new SourceUnavailableError(`数据源请求失败：HTTP ${res.status}`);
   return normalizeTencentSuggest(await res.text()).slice(0, count);
 }

@@ -22,6 +22,7 @@ import { fetchKline, fetchQuote, setDegradeLogger } from "../src/datasource.js";
 import { fetchEastmoneyKline, fetchEastmoneyQuote } from "../src/eastmoney.js";
 import { fetchTencentKline, fetchTencentQuote } from "../src/tencent.js";
 import type { Kline, Quote } from "../src/domain.js";
+import { SourceUnavailableError, UnknownSymbolError } from "../src/domain.js";
 
 const fakeQuote = { code: "600519", name: "贵州茅台" } as Quote;
 const fakeKline = [{ date: "2026-09-18" }] as Kline[];
@@ -60,17 +61,30 @@ describe("数据源降级（东财主 → 腾讯备）", () => {
     expect(fetchTencentKline).toHaveBeenCalledWith("600519", 60);
   });
 
-  it("非法输入不触发降级（两源结论相同，重试无意义）", async () => {
-    vi.mocked(fetchEastmoneyQuote).mockRejectedValue(new Error("无法识别的股票代码：茅台"));
+  it("代码格式无法解析时不触发降级（两源结论相同，重试无意义）", async () => {
+    // 用类型化错误：新设计里"代码不存在"由 UnknownSymbolError 表达，
+    // 不再靠消息前缀（原实现靠 startsWith("无法识别")，那个分支实际从未走到）
+    vi.mocked(fetchEastmoneyQuote).mockRejectedValue(
+      new UnknownSymbolError("茅台", "代码格式无法解析"),
+    );
 
-    await expect(fetchQuote("茅台")).rejects.toThrow("无法识别");
+    await expect(fetchQuote("茅台")).rejects.toBeInstanceOf(UnknownSymbolError);
     expect(fetchTencentQuote).not.toHaveBeenCalled();
   });
 
-  it("两源都失败时抛出备源错误", async () => {
-    vi.mocked(fetchEastmoneyQuote).mockRejectedValue(new Error("东财断连"));
-    vi.mocked(fetchTencentQuote).mockRejectedValue(new Error("腾讯不可用"));
+  it("两源都失败且都是源问题 → 抛出源错误（不是「代码不存在」）", async () => {
+    // 网络/HTTP 故障现在是类型化的（SourceUnavailableError / TypeError），
+    // 旧测试用普通 Error 表示断连——那正是新设计消除的歧义
+    vi.mocked(fetchEastmoneyQuote).mockRejectedValue(new SourceUnavailableError("东财断连"));
+    vi.mocked(fetchTencentQuote).mockRejectedValue(new SourceUnavailableError("腾讯不可用"));
 
     await expect(fetchQuote("600519")).rejects.toThrow("腾讯不可用");
+  });
+
+  it("两源都失败且都不是源问题 → 判定为代码不存在（用户决策 #30）", async () => {
+    vi.mocked(fetchEastmoneyQuote).mockRejectedValue(new Error("行情响应缺少 data 字段"));
+    vi.mocked(fetchTencentQuote).mockRejectedValue(new Error("腾讯行情响应字段不足"));
+
+    await expect(fetchQuote("999999")).rejects.toBeInstanceOf(UnknownSymbolError);
   });
 });

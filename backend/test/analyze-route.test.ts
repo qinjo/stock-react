@@ -219,3 +219,32 @@ describe("/api/analyze 的 token 用量透传", () => {
     expect(second.json().usage).toEqual(usage);
   });
 });
+
+/* --------- 未知代码 vs 数据源不可用：两者必须分得开（用户决策 #30） --------- */
+
+describe("错误码分流", () => {
+  it("代码不存在 → 400 INVALID_INPUT（该改输入），而不是 502（该等）", async () => {
+    // datasource 在"两源都失败且都不是源问题"时会抛 UnknownSymbolError
+    const { UnknownSymbolError } = await import("../src/domain.js");
+    vi.mocked(fetchQuote).mockRejectedValue(new UnknownSymbolError("999999", "行情响应缺少 data 字段"));
+    vi.mocked(fetchKline).mockRejectedValue(new UnknownSymbolError("999999", "K线响应缺少 klines 数组"));
+
+    const app = buildApp({ chat: vi.fn(), model: "deepseek-chat" });
+    const res = await app.inject({ method: "GET", url: "/api/analyze?code=999999" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_INPUT");
+    // 消息里要带上用户打的那个代码，便于他核对
+    expect(res.json().message).toContain("999999");
+  });
+
+  it("数据源不可用 → 502 SOURCE_UNAVAILABLE（该等），而不是 400（怪用户）", async () => {
+    const { SourceUnavailableError } = await import("../src/domain.js");
+    vi.mocked(fetchQuote).mockRejectedValue(new SourceUnavailableError("数据源请求失败：HTTP 502", 502));
+    vi.mocked(fetchKline).mockRejectedValue(new SourceUnavailableError("数据源请求失败：HTTP 502", 502));
+
+    const app = buildApp({ chat: vi.fn(), model: "deepseek-chat" });
+    const res = await app.inject({ method: "GET", url: "/api/analyze?code=600519" });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe("SOURCE_UNAVAILABLE");
+  });
+});

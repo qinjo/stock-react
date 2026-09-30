@@ -1,4 +1,4 @@
-import type { Kline, Quote } from "./domain.js";
+import { SourceUnavailableError, UnknownSymbolError, type Kline, type Quote } from "./domain.js";
 
 /**
  * 东方财富数据适配器。
@@ -53,7 +53,7 @@ export function resolveSecid(input: string): string {
 
   // 纯代码
   const code = raw.match(/^([0-9]{6})$/);
-  if (!code) throw new Error(`无法识别的股票代码：${input}`);
+  if (!code) throw new UnknownSymbolError(input, "代码格式无法解析");
   const digits = code[1]!;
   const market = digits.startsWith("6") || digits.startsWith("9") ? "1" : "0";
   return `${market}.${digits}`;
@@ -153,7 +153,7 @@ async function getJson(url: string, headers: Record<string, string>): Promise<un
     signal: AbortSignal.timeout(10_000),
     headers,
   });
-  if (!res.ok) throw new Error(`数据源请求失败：HTTP ${res.status}`);
+  if (!res.ok) throw new SourceUnavailableError(`数据源请求失败：HTTP ${res.status}`);
   return parseMaybeJsonp(await res.text());
 }
 

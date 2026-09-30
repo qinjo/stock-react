@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { UnknownSymbolError } from "../domain.js";
 import { fetchKline, fetchQuote } from "../datasource.js";
 import { computeIndicators, InsufficientDataError } from "../indicators.js";
 import { deriveValuation, tallySignals } from "../derived.js";
@@ -101,7 +102,11 @@ export async function analyzeRoutes(app: FastifyInstance, deps: AnalyzeDeps): Pr
       if (err instanceof InsufficientDataError) {
         throw new ApiError("INSUFFICIENT_DATA", err.message, 400);
       }
-      if (err instanceof Error && err.message.startsWith("无法识别")) {
+      // 用户拍板（#30）：查不到的代码归 INVALID_INPUT 400，
+      // 与"数据源不可用"502 分开——前者该改输入，后者该等待。
+      // 判据是**类型**而不是消息前缀：原实现靠 `startsWith("无法识别")`，
+      // 而两个源对未知代码抛的都是字段形态错误，那个分支从来没被走到过。
+      if (err instanceof UnknownSymbolError) {
         throw new ApiError("INVALID_INPUT", err.message, 400);
       }
       app.log.error(err);
