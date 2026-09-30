@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_CRITERIA, paramsFor } from "../src/screener/params.js";
 import { buildContext, RULES } from "../src/screener/rules.js";
 import { evaluateTrendSignals } from "../src/screener/signals.js";

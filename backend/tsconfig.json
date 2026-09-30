@@ -6,6 +6,9 @@
     "lib": ["ES2022"],
     "types": ["node"],
     "strict": true,
+    // 死代码门禁：未使用的局部变量与导入直接报错。
+    // 2026-09-30 开启时它立刻在生产代码里揪出三处（review.ts 的 fy、signals.ts 的 ma10/last）。
+    "noUnusedLocals": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

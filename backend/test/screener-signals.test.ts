@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CRITERIA, paramsFor } from "../src/screener/params.js";
 import { buildContext } from "../src/screener/rules.js";
 import { detectBullishDivergence, evaluateTrendSignals, priorHigh, type TrendSignals } from "../src/screener/signals.js";
-import type { DailyBar, SecurityInput } from "../src/screener/types.js";
+import type { SecurityInput } from "../src/screener/types.js";
 import { rankShortlist, toScreenResponse } from "../src/screener/response.js";
 import { bars, goodSecurity } from "./helpers/screener-fixtures.js";
 

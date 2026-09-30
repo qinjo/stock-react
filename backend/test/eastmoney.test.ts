@@ -6,7 +6,6 @@ import { normalizeKline, normalizeQuote, parseMaybeJsonp, resolveSecid } from ".
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const load = (name: string) => JSON.parse(readFileSync(join(fixtures, name), "utf8"));
-const loadText = (name: string) => readFileSync(join(fixtures, name), "utf8");
 
 describe("resolveSecid", () => {
   it("6 位纯代码按市场前缀判定（6 开头沪市）", () => {

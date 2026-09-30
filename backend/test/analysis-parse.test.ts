@@ -138,7 +138,7 @@ const goodJson = JSON.stringify({
 });
 
 describe("提示词契约（防止后续改动悄悄丢失关键约束）", () => {
-  const { system, user } = buildAnalysisPrompt(sampleInput);
+  const { system } = buildAnalysisPrompt(sampleInput);
 
   it("包含角色定位与推理清单", () => {
     expect(system).toContain("分析师");
@@ -210,7 +210,7 @@ describe("提示词契约（防止后续改动悄悄丢失关键约束）", () =
 });
 
 describe("提示词的数据注入", () => {
-  const { system, user } = buildAnalysisPrompt(sampleInput);
+  const { user } = buildAnalysisPrompt(sampleInput);
 
   it("user 注入身份与数据截至日", () => {
     expect(user).toContain("贵州茅台");
