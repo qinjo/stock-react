@@ -1,4 +1,4 @@
-import { adjustedPrice, countCrossings, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, rangeBounds, smaSeries } from "./structure.js";
+import { adjustedPrice, countCrossings, fallingTrendlineAt, findSwingHighs, isOneWordBoard, limitUpFlags, limitUpPrice, macdDifSeries, rangeBounds, smaSeries } from "./structure.js";
 import type { ScreenerParams } from "./params.js";
 import type { DailyBar, RuleHit, RuleOutcome, RuleSource, ScreenerCriteria, SecurityInput, FunnelStage } from "./types.js";
 
@@ -22,11 +22,21 @@ export type RuleContext = {
   bars: DailyBar[];
   /** 后复权序列（均线、结构等需要跨除权连续的量） */
   adjBars: DailyBar[];
-  /** 后复权 MA100，与 adjBars 同长度对齐 */
+  /** 后复权均线序列，均与 adjBars 同长度对齐（对齐是刻意的：差一位会让信号静默判错） */
+  ma10: Array<number | null>;
+  ma20: Array<number | null>;
+  ma60: Array<number | null>;
   ma100: Array<number | null>;
+  /** 后复权 MACD 快线 DIF 序列，与 adjBars 对齐（底背离要用它） */
+  dif: number[];
   /** 逐根涨停标记 */
   limitUp: boolean[];
 };
+
+/** 后复权价 → 真实成交价：除以最新一根的因子。结构位、止损位都要落到这个口径上。 */
+export function toDisplayPrice(adjPrice: number, lastAdjFactor: number): number {
+  return lastAdjFactor === 0 ? adjPrice : adjPrice / lastAdjFactor;
+}
 
 /** 从最后一根往前找最近一次「上穿 MA100」距今多少根；从未上穿则为 null。 */
 export function barsSinceMa100Cross(
@@ -315,16 +325,18 @@ export function buildContext(
     adjFactor: bar.adjFactor,
   }));
 
+  const adjCloses = adjBars.map((bar) => bar.close);
   return {
     security,
     params,
     criteria,
     bars,
     adjBars,
-    ma100: smaSeries(
-      adjBars.map((bar) => bar.close),
-      100,
-    ),
+    ma10: smaSeries(adjCloses, 10),
+    ma20: smaSeries(adjCloses, 20),
+    ma60: smaSeries(adjCloses, 60),
+    ma100: smaSeries(adjCloses, 100),
+    dif: macdDifSeries(adjCloses),
     limitUp: limitUpFlags(bars, security.board),
   };
 }

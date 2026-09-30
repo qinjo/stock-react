@@ -33,6 +33,7 @@ describe("screenUniverse 漏斗分档", () => {
       afterExclusions: 3, // 600001 / 600007 / 600008 通过排除层
       afterHardFilters: 2, // 600007 倒在根数不足
       shortlisted: 1, // 600008 倒在 MA100
+      signalEligible: 1, // 600001 命中信号且止损空间在档内
     });
   });
 
@@ -58,22 +59,31 @@ describe("screenUniverse 漏斗分档", () => {
     // 严格档要求 250 根，600007 本来就倒在硬门槛；其余计数不变
     expect(strict.funnel.universe).toBe(8);
     expect(strict.funnel.shortlisted).toBe(1);
+    // 严格档的止损空间上限是 5%，夹具约 3.5%，仍应入选
+    expect(strict.funnel.signalEligible).toBe(1);
     expect(strict.criteria.strictness).toBe("strict");
   });
 
   it("回显本次使用的筛选条件（缓存键与界面展示都依赖它）", () => {
     const outcomeWithBeijing = screenUniverse(MIXED, {
-      mode: "event",
+      mode: "trend",
       strictness: "loose",
       includeBeijing: true,
     });
     expect(outcomeWithBeijing.criteria).toEqual({
-      mode: "event",
+      mode: "trend",
       strictness: "loose",
       includeBeijing: true,
     });
     // 打开北交所后 600006 进入候选
     expect(outcomeWithBeijing.shortlisted.map((v) => v.code)).toContain("600006");
+  });
+
+  it("事件驱动模式尚未接入信号层，因此暂时出不了候选（如实返回空，而不是硬塞）", () => {
+    const eventOutcome = screenUniverse(MIXED, { ...DEFAULT_CRITERIA, mode: "event" });
+    expect(eventOutcome.funnel.shortlisted).toBeGreaterThan(0);
+    expect(eventOutcome.funnel.signalEligible).toBe(0);
+    expect(eventOutcome.shortlisted).toEqual([]);
   });
 
   it("空输入不炸", () => {
@@ -82,6 +92,7 @@ describe("screenUniverse 漏斗分档", () => {
       afterExclusions: 0,
       afterHardFilters: 0,
       shortlisted: 0,
+      signalEligible: 0,
     });
   });
 });
@@ -114,10 +125,13 @@ describe("候选画像", () => {
   });
 
   it("计算最近一次上穿 MA100 距今多少根（书 L545：刚突破的更值得关注）", () => {
-    // 140 根横在 10，随后 10 根拉升 —— 上穿发生在第 141 根，距今 9 根
+    // 140 根横在 10，随后 10 根缓升、末根放量突破前高 —— 上穿发生在第 141 根，距今 9 根。
+    // 斜率刻意放平：早先那版 10 根从 10 拉到 15，止损空间 15% 超过档内 8% 上限，
+    // 会被止损空间闸门挡掉而根本不进候选（这本身是对的，只是测不到想看的东西）。
     const flatThenRise = [
       ...Array.from({ length: 140 }, () => 10),
-      ...Array.from({ length: 10 }, (_, i) => 10.5 + i * 0.5),
+      ...Array.from({ length: 9 }, (_, i) => 10.2 + i * 0.1),
+      11.2,
     ];
     const outcome = screenUniverse([goodSecurity({ code: "600001", bars: bars(flatThenRise) })]);
     expect(outcome.shortlisted).toHaveLength(1);

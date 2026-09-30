@@ -114,6 +114,54 @@ export type ScreenVerdict = {
   /** 因数据缺失而未能判定的规则 id */
   unknownRules: string[];
   metrics: ScreenMetrics;
+  /** 命中的入场信号（按档序升序） */
+  signals: SignalSet;
+  /** 离场计划：止损位与依据、失效条件、分批止盈 */
+  exit: ExitPlan;
+  /** 参考压力位（前高 / 区间上沿） */
+  resistance: ReferenceResistance[];
+};
+
+/* ------------------------------ 信号层类型 ------------------------------ */
+
+export type SignalId = "S1" | "S2" | "S3" | "S5" | "S13";
+
+export type SignalHit = {
+  id: SignalId;
+  label: string;
+  /** 档序：数字越小越强 */
+  tier: number;
+  detail: string;
+  bookRef: string;
+};
+
+export type SignalSet = {
+  signals: SignalHit[];
+  /** 最强信号的档序；无信号为 null */
+  bestTier: number | null;
+};
+
+export type StopBasis = "low123" | "ma-pairing" | "fixed-ratio";
+
+export type ExitPlan = {
+  /** 入场参考价（最新不复权收盘，即用户能在盘口看到的价） */
+  entry: number;
+  /** 止损位（真实成交价口径） */
+  stop: number;
+  stopBasis: StopBasis;
+  stopBasisLabel: string;
+  /** 止损空间占入场价的比例；超过本档上限即不入市 */
+  stopSpace: number;
+  invalidation: string;
+  scaleOut: string;
+  bookRef: string;
+};
+
+export type ReferenceResistance = {
+  kind: "prior-high" | "range-high";
+  /** 真实成交价口径 */
+  price: number;
+  detail: string;
 };
 
 export type FunnelCounts = {
@@ -125,6 +173,11 @@ export type FunnelCounts = {
   afterHardFilters: number;
   /** 通过基础池（MA100 位置、市值与流动性、非下跌趋势线之下、非震荡区间） */
   shortlisted: number;
+  /**
+   * 通过信号层与止损空间闸门的数量。
+   * 基础池回答"能不能买"，信号层回答"现在是不是买点"——两者是不同的筛子。
+   */
+  signalEligible: number;
 };
 
 export type ScreenOutcome = {

@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MarketStore } from "../src/market/store.js";
 import { screenUniverse } from "../src/screener/engine.js";
+import { rankShortlist } from "../src/screener/response.js";
 import { loadUniverseFromStore } from "../src/screener/load.js";
 import { DEFAULT_CRITERIA } from "../src/screener/params.js";
 import type { ScreenOutcome, Strictness } from "../src/screener/types.js";
@@ -56,27 +57,43 @@ function printOutcome(outcome: ScreenOutcome, sample: number): void {
   console.log(
     `  全市场 ${funnel.universe} → 排除池 ${funnel.afterExclusions} (${drop(funnel.universe, funnel.afterExclusions)})` +
       ` → 硬门槛 ${funnel.afterHardFilters} (${drop(funnel.afterExclusions, funnel.afterHardFilters)})` +
-      ` → 基础池 ${funnel.shortlisted} (${drop(funnel.afterHardFilters, funnel.shortlisted)})`,
+      ` → 基础池 ${funnel.shortlisted} (${drop(funnel.afterHardFilters, funnel.shortlisted)})` +
+      ` → 有信号 ${funnel.signalEligible} (${drop(funnel.shortlisted, funnel.signalEligible)})`,
   );
   if (outcome.inactiveRules.length > 0) {
     console.log(`  ⚠ 当前未生效的规则：${outcome.inactiveRules.join("、")}（多为缺数据，见规则层的 unknown 说明）`);
   }
   if (outcome.shortlisted.length === 0) return;
 
-  console.log(`  候选样本（按上穿 MA100 时点升序，刚突破的排前面）：`);
-  const sampleRows = [...outcome.shortlisted]
-    .sort((a, b) => {
-      const x = a.metrics.barsSinceMa100Cross ?? Number.MAX_SAFE_INTEGER;
-      const y = b.metrics.barsSinceMa100Cross ?? Number.MAX_SAFE_INTEGER;
-      return x - y;
-    })
-    .slice(0, sample);
-  for (const row of sampleRows) {
-    const since = row.metrics.barsSinceMa100Cross;
+  // 用与接口一致的排序，否则预览看到的顺序和界面不一样，失去诊断价值
+  const ranked = rankShortlist(outcome.shortlisted);
+
+  const tierCounts = new Map<number, number>();
+  for (const row of ranked) {
+    const tier = row.signals.bestTier ?? 0;
+    tierCounts.set(tier, (tierCounts.get(tier) ?? 0) + 1);
+  }
+  const tierLabel: Record<number, string> = {
+    1: "底背离双突破",
+    2: "低位123",
+    3: "三档入场",
+    4: "MA20 上穿",
+    5: "阻力突破/支撑回踩",
+  };
+  console.log(
+    `  信号档分布：${[...tierCounts.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([tier, n]) => `${tierLabel[tier] ?? "无信号"} ${n}`)
+      .join(" / ")}`,
+  );
+
+  console.log(`  候选样本（按信号档序，再按止损空间升序）：`);
+  for (const row of ranked.slice(0, sample)) {
+    const strongest = row.signals.signals[0];
     console.log(
-      `    ${row.code}  MA100 偏离 ${pct(row.metrics.ma100Deviation)}` +
-        `  上穿距今 ${since === null ? "全程在上" : `${since} 根`}` +
-        `  成交额 ${yi(row.metrics.turnoverAmount)}`,
+      `    ${row.code}  档${row.signals.bestTier} ${strongest?.label ?? "—"}` +
+        `  止损 ${row.exit.stop.toFixed(2)}（${(row.exit.stopSpace * 100).toFixed(1)}%，${row.exit.stopBasis}）` +
+        `  压力位 ${row.resistance[0]?.price.toFixed(2) ?? "—"}`,
     );
   }
 }

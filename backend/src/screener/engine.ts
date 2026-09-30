@@ -1,6 +1,7 @@
 import { DEFAULT_CRITERIA, paramsFor } from "./params.js";
 import { RULES, barsSinceMa100Cross, buildContext, evaluateRules } from "./rules.js";
 import { trendR2 } from "./structure.js";
+import { evaluateSignals } from "./signals.js";
 import type {
   FunnelCounts,
   ScreenMetrics,
@@ -63,6 +64,7 @@ export function screenUniverse(
     afterExclusions: 0,
     afterHardFilters: 0,
     shortlisted: 0,
+    signalEligible: 0,
   };
 
   const shortlisted: ScreenVerdict[] = [];
@@ -90,6 +92,13 @@ export function screenUniverse(
     if (!passed) continue; // stage === "shortlist"
     funnel.shortlisted++;
 
+    // 信号层：基础池回答"能不能买"，这里回答"现在是不是买点"
+    const signalSet = evaluateSignals(criteria.mode, ctx);
+    if (signalSet.signals.bestTier === null) continue;
+    // 止损空间过大的不入市（书 L1767）：买点再好，错了要走太远也不值得做
+    if (signalSet.exit.stopSpace > params.stopSpaceMax) continue;
+    funnel.signalEligible++;
+
     shortlisted.push({
       code: security.code,
       passed: true,
@@ -97,6 +106,9 @@ export function screenUniverse(
       hits,
       unknownRules,
       metrics: metricsOf(ctx),
+      signals: signalSet.signals,
+      exit: signalSet.exit,
+      resistance: signalSet.resistance,
     });
   }
 

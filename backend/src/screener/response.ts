@@ -1,11 +1,14 @@
 import { fromDateKey } from "../market/qlib.js";
 import type { Board } from "../market/qlib.js";
 import type {
+  ExitPlan,
   FunnelCounts,
+  ReferenceResistance,
   RuleSource,
   ScreenOutcome,
   ScreenVerdict,
   ScreenerMode,
+  SignalSet,
   Strictness,
 } from "./types.js";
 
@@ -41,6 +44,14 @@ export type ScreenCandidate = {
   ruleHits: ScreenRuleHit[];
   /** 扣分项：当前为"因缺数据未判定"的说明 */
   deductions: string[];
+  /** 命中的入场信号（按档序升序）；最强档见 signalTier */
+  signals: SignalSet;
+  /** 最强信号的档序，越小越强 */
+  signalTier: number | null;
+  /** 离场计划：止损位与依据、失效条件、分批止盈。**不输出目标价** */
+  exit: ExitPlan;
+  /** 参考压力位：可能受阻的位置，不是涨幅预测 */
+  resistance: ReferenceResistance[];
 };
 
 export type ScreenRequestParams = {
@@ -73,12 +84,23 @@ export type ScreenResponse = {
 const NULL_LAST = Number.MAX_SAFE_INTEGER;
 
 /**
- * 信号层接入前的排序：先按"刚突破 MA100"的时点（书 L545：面临趋势拐点），
- * 再按走势流畅度、流通市值、成交额——都是书里的次级因子。
- * 止损空间这一项要等离场计划（见后续工单），届时插到最前面。
+ * 排序：**先按信号档序**（底背离双突破 > 低位123 > 三档入场 > MA20 上穿 > 阻力突破/支撑回踩），
+ * 档内再按书的次级因子：止损空间升序（"做错小亏"）→ 刚突破 MA100 的时点 → 走势流畅度
+ * → 流通市值 → 成交额。
+ *
+ * 不用 1–100 评分：书里没有分值体系，权重只会变成无法溯源的解读。
  */
 export function rankShortlist(shortlist: readonly ScreenVerdict[]): ScreenVerdict[] {
   return [...shortlist].sort((a, b) => {
+    const tierA = a.signals.bestTier ?? NULL_LAST;
+    const tierB = b.signals.bestTier ?? NULL_LAST;
+    if (tierA !== tierB) return tierA - tierB;
+
+    // 买点再好，错了要走太远也不值得做（书 L1767）；止损空间已由引擎卡过上限
+    const spaceA = a.exit.stopSpace;
+    const spaceB = b.exit.stopSpace;
+    if (spaceA !== spaceB) return spaceA - spaceB;
+
     const sinceA = a.metrics.barsSinceMa100Cross ?? NULL_LAST;
     const sinceB = b.metrics.barsSinceMa100Cross ?? NULL_LAST;
     if (sinceA !== sinceB) return sinceA - sinceB;
@@ -128,6 +150,10 @@ function toCandidate(
     deductions: verdict.hits
       .filter((hit) => hit.outcome.unknown === true)
       .map((hit) => `${hit.label}：${hit.outcome.detail}`),
+    signals: verdict.signals,
+    signalTier: verdict.signals.bestTier,
+    exit: verdict.exit,
+    resistance: verdict.resistance,
   };
 }
 

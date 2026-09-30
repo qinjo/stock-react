@@ -260,6 +260,32 @@ export function countCrossings(
   return crossings;
 }
 
+/**
+ * 指数移动平均序列，与输入**同长度对齐**（采用首值播种）。
+ *
+ * 刻意自己算而不用指标库：库返回的是可计算的那一段，与日 K 下标对齐时极易差一位，
+ * 而底背离判定比的正是"两个低点处的 DIF"，差一位就会把背离判反。
+ */
+export function emaSeries(values: readonly number[], period: number): number[] {
+  const out: number[] = [];
+  if (values.length === 0) return out;
+  const k = 2 / (period + 1);
+  let previous = values[0] as number;
+  out.push(previous);
+  for (let i = 1; i < values.length; i++) {
+    previous = (values[i] as number) * k + previous * (1 - k);
+    out.push(previous);
+  }
+  return out;
+}
+
+/** MACD 快线 DIF = EMA(12) − EMA(26)，与输入同长度对齐。 */
+export function macdDifSeries(values: readonly number[]): number[] {
+  const fast = emaSeries(values, 12);
+  const slow = emaSeries(values, 26);
+  return values.map((_, i) => (fast[i] as number) - (slow[i] as number));
+}
+
 /* ------------------------------- 涨停判定 ------------------------------- */
 
 /** 各板块的涨停幅度。北交所 30%，创业板/科创板 20%，其余 10%。 */

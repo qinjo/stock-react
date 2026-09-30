@@ -61,10 +61,19 @@ export function sideways(n: number, base = 10, amplitude = 0.05): number[] {
 }
 
 /**
- * 一只默认"处处通过"的标的：300 根稳步上涨（10 → 约 25）。
- * 各档下限都能满足（严格档要求 250 根，最大市值 50 亿）。
+ * 一只默认"处处通过"的标的：300 根稳步上涨（10 → 约 25），**末根放量突破前高**。
+ *
+ * 末根那一跳是必要的：接上信号层之后，"只是站上 MA100"已经不算买点，
+ * 而单调上涨的走势既没有均线穿越、也没有显著高低点，会因为**没有信号**而被筛掉。
+ * 这一跳让它命中 S13（阻力突破），从而是一只真正会被筛出来的标的。
+ * 幅度取 +3%：既足以越过前 60 根的最高价，又不至于触发涨停判定，
+ * 且止损空间（约 3.5%）在三档上限（10%/8%/5%）之内。
+ *
+ * 需要"没有信号"的用例请显式构造走势，不要依赖这个夹具。
  */
 export function goodSecurity(over: Partial<SecurityInput> = {}): SecurityInput {
+  const closes = rising(300);
+  closes[closes.length - 1] = (closes[closes.length - 2] as number) * 1.03;
   return {
     code: "600519",
     name: "测试股",
@@ -72,7 +81,7 @@ export function goodSecurity(over: Partial<SecurityInput> = {}): SecurityInput {
     isLive: true,
     floatMarketCap: 40e8,
     tradedOnLatestDay: true,
-    bars: bars(rising(300)),
+    bars: bars(closes),
     ...over,
   };
 }
