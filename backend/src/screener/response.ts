@@ -3,6 +3,7 @@ import type { Board } from "../market/qlib.js";
 import type {
   ExitPlan,
   FunnelCounts,
+  FunnelStage,
   MarketGateLike,
   ReferenceResistance,
   RuleSource,
@@ -25,6 +26,8 @@ export type ScreenRuleHit = {
   id: string;
   label: string;
   source: RuleSource;
+  /** 所属层：界面据此分组（排除层 / 硬门槛 / 基础池） */
+  stage: FunnelStage;
   /** 书内定位，如 `L597` */
   bookRef?: string;
   /** 阈值与实测值的对照（界面直接展示，用户据此验证"为什么是它"） */
@@ -148,6 +151,7 @@ function toCandidate(
       id: hit.id,
       label: hit.label,
       source: hit.source,
+      stage: hit.stage,
       ...(hit.bookRef ? { bookRef: hit.bookRef } : {}),
       detail: hit.outcome.detail,
       unknown: hit.outcome.unknown === true,

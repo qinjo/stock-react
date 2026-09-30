@@ -248,10 +248,14 @@ export type Fundamentals = {
 /** 规则来源：书内带行号 / 书内但阈值为推断 / 项目自加的补丁 */
 export type RuleSource = "book" | "inferred" | "offbook";
 
+export type FunnelStage = "exclusions" | "hardFilters" | "shortlist";
+
 export type ScreenRuleHit = {
   id: string;
   label: string;
   source: RuleSource;
+  /** 所属层：界面据此分组 */
+  stage: FunnelStage;
   /** 书内定位，如 `L597` */
   bookRef?: string;
   /** 阈值与实测值的对照 */

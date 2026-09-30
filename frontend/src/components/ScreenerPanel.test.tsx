@@ -29,12 +29,39 @@ const candidate = {
   },
   ruleHits: [
     {
+      id: "H-bars",
+      label: "日 K 根数下限",
+      source: "book" as const,
+      stage: "hardFilters" as const,
+      bookRef: "L2386",
+      detail: "300 根 ≥ 150",
+      unknown: false,
+    },
+    {
       id: "U-ma100",
       label: "站上 MA100（书的核心选股条件）",
       source: "book" as const,
+      stage: "shortlist" as const,
       bookRef: "L597",
       detail: "后复权收盘 1500.00 > MA100 1430.00（偏离 4.9%）",
       unknown: false,
+    },
+    {
+      id: "U-turnover",
+      label: "成交额下限（可买性）",
+      source: "offbook" as const,
+      stage: "shortlist" as const,
+      detail: "32.60亿 ≥ 5000万",
+      unknown: false,
+    },
+    {
+      id: "U-marketCap",
+      label: "流通市值区间",
+      source: "inferred" as const,
+      stage: "shortlist" as const,
+      bookRef: "L1686",
+      detail: "流通市值未知（待行情快照），闸门 20.00亿–80.00亿 未生效",
+      unknown: true,
     },
   ],
   deductions: ["流通市值：流通市值未知（待行情快照），闸门 20.00亿–80.00亿 未生效"],
@@ -516,5 +543,75 @@ describe("大盘门（#22）", () => {
       },
     });
     expect(await screen.findByText(/创业板指在 MA100 之下/)).toBeInTheDocument();
+  });
+});
+
+/* ---------------------- 候选明细与来源标记（#17） ---------------------- */
+
+describe("候选明细与来源标记（#17）", () => {
+  async function expandRules() {
+    stubFetch({ ok: true, body: success });
+    render(<ScreenerPanel onPick={() => {}} />);
+    const user = await runScreen();
+    await screen.findByText("贵州茅台");
+
+    const summary = screen.getByText(/规则明细/);
+    const details = summary.closest("details");
+    expect(details).not.toBeNull();
+    return { user, details: details as HTMLDetailsElement, summary };
+  }
+
+  it("默认收起，点击后展开（避免十五条判定把卡片撑长）", async () => {
+    const { user, details, summary } = await expandRules();
+    expect(details.open).toBe(false);
+    await user.click(summary);
+    expect(details.open).toBe(true);
+  });
+
+  it("摘要里说明判定条数与未判定条数", async () => {
+    await expandRules();
+    expect(screen.getByText(/4 条判定，全部通过/)).toBeInTheDocument();
+    expect(screen.getByText(/其中 1 条因缺数据未判定/)).toBeInTheDocument();
+  });
+
+  it("逐条给出规则名与「阈值 + 实际值」的对照", async () => {
+    await expandRules();
+    expect(screen.getByText("站上 MA100（书的核心选股条件）")).toBeInTheDocument();
+    expect(screen.getByText(/后复权收盘 1500\.00 > MA100 1430\.00/)).toBeInTheDocument();
+    expect(screen.getByText("成交额下限（可买性）")).toBeInTheDocument();
+    expect(screen.getByText(/32\.60亿 ≥ 5000万/)).toBeInTheDocument();
+  });
+
+  it("每条规则标出来源：书（带行号）/ 推断 / 书外", async () => {
+    await expandRules();
+    expect(screen.getByText("书 L597")).toBeInTheDocument();
+    expect(screen.getByText("书 L2386")).toBeInTheDocument();
+    expect(screen.getByText("推断")).toBeInTheDocument();
+    expect(screen.getByText("书外")).toBeInTheDocument();
+  });
+
+  it("按层分组展示（排除层 / 硬门槛 / 基础池）", async () => {
+    await expandRules();
+    expect(screen.getByText("硬门槛")).toBeInTheDocument();
+    expect(screen.getByText("基础池")).toBeInTheDocument();
+  });
+
+  it("未判定的规则单独标出，并同时出现在扣分项里", async () => {
+    await expandRules();
+    expect(screen.getByText("（未判定）")).toBeInTheDocument();
+    expect(screen.getByText(/^未判定：/)).toBeInTheDocument();
+  });
+
+  it("页头展示漏斗各档计数，且不做逐只淘汰原因清单", async () => {
+    stubFetch({ ok: true, body: success });
+    render(<ScreenerPanel onPick={() => {}} />);
+    await runScreen();
+    await screen.findByText("贵州茅台");
+
+    expect(
+      screen.getByText(/全市场 6030 → 排除池 5006 → 硬门槛 4855 → 基础池 337 → 有信号/),
+    ).toBeInTheDocument();
+    // 被淘汰的六千只不给逐条原因，只给计数
+    expect(screen.queryByText(/淘汰原因/)).not.toBeInTheDocument();
   });
 });
