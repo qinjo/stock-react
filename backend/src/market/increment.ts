@@ -383,7 +383,13 @@ export async function runIncrement(
 
   if (snapshotDate !== null) {
     const previous = stats.previousLatestDate;
-    if (previous !== null && store.nextTradingDate(previous) !== snapshotDate) {
+    // 三种情况要分开说，否则同日重跑会被误报成"中间有缺口"
+    // （真实跑第二次增量时就踩到了这条误导文案）
+    if (previous !== null && previous === snapshotDate) {
+      stats.notes.push(
+        `快照日与库内最新交易日同为 ${snapshotDate}：按同日刷新处理（覆盖当日 bar），不做除权判定。`,
+      );
+    } else if (previous !== null && store.nextTradingDate(previous) !== snapshotDate) {
       stats.notes.push(
         `库内最新交易日 ${previous} 与快照日 ${snapshotDate} 之间不是相邻交易日：` +
           `中间缺口无法用当日快照补齐，这段时间的除权检测按"未判定"处理。`,

@@ -310,6 +310,22 @@ describe("runIncrement（临时真库 + 假快照，不触网）", () => {
     expect(store.readIndexBars("sh000001", 1)[0]?.close).toBe(3840.83);
   });
 
+  it("同日重跑：说明是「同日刷新」，而不是误报成「中间有缺口」", async () => {
+    // 真实跑第二次增量时踩到的误导文案：快照日与库内最新日相同，
+    // 落进了"不相邻"分支，输出"中间缺口无法补齐"，让人以为出了问题
+    const sameDay = async (): Promise<TencentSnapshot[]> => [snapshot("sz000001", { name: "平安银行", price: 10.5, prevClose: 10 })];
+    // 先正常跑一次，把库内最新日推到 D1
+    await runIncrement(store, { fetchSnapshot: sameDay }, { ensureCalendar: false });
+    // 再跑一次同一天
+    const stats = await runIncrement(store, { fetchSnapshot: sameDay }, { ensureCalendar: false });
+
+    expect(stats.barsWritten).toBe(0);
+    expect(stats.barsRefreshed).toBeGreaterThan(0);
+    const notes = stats.notes.join("\n");
+    expect(notes).toContain("同日刷新");
+    expect(notes).not.toContain("缺口");
+  });
+
   it("不相邻时不做除权改因子，并在 notes 里说明缺口", async () => {
     // 日历里有 09-29，但库内最后一根停在 09-25 —— 中间那天缺数据
     const sparse = new MarketStore(join(dir, "sparse.sqlite"));
