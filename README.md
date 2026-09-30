@@ -101,6 +101,7 @@ npm run verify              # 对账（两条都跑，建议每次 update:kline 
 #   └─ verify:invariants  数据不变式：因子/OHLC/日历/唯一性/标的标记/meta 记忆化/估值覆盖
 # 以下这条会真的调模型（不进测试套件，因为测试铁律是"永不触网"）
 npm run verify:llm          # 验真实模型的输出能否被我们的解析器接住
+npm run profile:rules       # 规则归因：全市场跑一遍，看每条规则真实拦下多少只
 npm run screen:preview      # 在命令行看三档漏斗与候选样本
 ```
 
@@ -209,6 +210,7 @@ cd frontend && npm test   # 128 项：搜索补全、快照卡、图表数据转
 - 规则来源（书内原文 + 行号）：[`_research/短线操盘技法-选股规则提炼.md`](_research/短线操盘技法-选股规则提炼.md)
 - 历史回放验收记录：[`docs/verification-replay-2026-09-29.md`](docs/verification-replay-2026-09-29.md)
 - 规则溯源抽查：[`docs/verification-book-citations.md`](docs/verification-book-citations.md)（书 → 提炼笔记 → 代码）
+- 规则归因画像：[`docs/verification-rule-attribution.md`](docs/verification-rule-attribution.md)（真实数据下谁拦下了谁）
 - 调研笔记：[`_research/开源LLM金融分析项目调研笔记.md`](_research/开源LLM金融分析项目调研笔记.md)、[`free-stock-api-research.md`](free-stock-api-research.md)
 
 ## 范围之外（当前版本）

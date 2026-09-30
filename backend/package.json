@@ -16,7 +16,8 @@
     "replay:screen": "tsx scripts/replay-screen.ts",
     "verify:invariants": "tsx scripts/verify-invariants.ts",
     "verify": "npm run verify:kline && npm run verify:invariants",
-    "verify:llm": "tsx --env-file-if-exists=.env scripts/verify-llm-paths.ts"
+    "verify:llm": "tsx --env-file-if-exists=.env scripts/verify-llm-paths.ts",
+    "profile:rules": "tsx scripts/profile-rules.ts"
   },
   "dependencies": {
     "fastify": "^5.12.1",
