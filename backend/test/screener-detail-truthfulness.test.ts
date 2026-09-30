@@ -149,3 +149,98 @@ describe("U-marketCap / U-turnover：报出的值与门槛都来自本档参数"
     expect(outcome.detail).toContain((standard.minTurnoverAmount / 1e4).toFixed(0));
   });
 });
+
+/* ------------- 规则名描述的判据 == 代码实际判的判据 ------------- */
+
+/**
+ * "名字说的"与"代码判的"最容易被后续改动悄悄拆开。
+ * 这三条是其中最容易混淆的——位置 vs 事件、第几日的窗口、以及一处刻意细化。
+ */
+describe("U-ma100「站上 MA100」判的是位置，不是上穿", () => {
+  const evalMa100 = (security: Parameters<typeof buildContext>[0]) =>
+    rule("U-ma100").evaluate(
+      buildContext(security, paramsFor("standard"), { ...DEFAULT_CRITERIA, strictness: "standard" }),
+    );
+
+  it("一路上涨、早已在 MA100 之上（今天没有任何上穿）仍然通过", () => {
+    // 单调上涨的序列最后一根不可能"上穿"MA100——它早就在上面了。
+    // 若把条件写成"上穿"，这里会失败，而书的原意是**位置**（书 L597）。
+    const outcome = evalMa100(goodSecurity());
+    expect(outcome.ok).toBe(true);
+    expect(outcome.detail).toContain(">");
+  });
+
+  it("跌破 MA100 时被拦下", () => {
+    const base = goodSecurity();
+    const bars = base.bars.map((b) => ({ ...b }));
+    const n = bars.length;
+    // 末根砍到远低于 MA100
+    (bars[n - 1] as { close: number; high: number; low: number }).close = 1;
+    const outcome = evalMa100({ ...base, bars: bars as never });
+    expect(outcome.ok).toBe(false);
+  });
+});
+
+describe("H-noLimitUpYesterday「涨停后第 2–3 日不追高」判的是那个窗口", () => {
+  const evalYesterday = (security: Parameters<typeof buildContext>[0]) =>
+    rule("H-noLimitUpYesterday").evaluate(
+      buildContext(security, paramsFor("standard"), { ...DEFAULT_CRITERIA, strictness: "standard" }),
+    );
+
+  const withLimitUpAt = (daysAgo: number) => {
+    const base = goodSecurity();
+    const bars = base.bars.map((b) => ({ ...b }));
+    const n = bars.length;
+    const idx = n - 1 - daysAgo;
+    (bars[idx] as { close: number }).close = limitUpPrice(
+      (bars[idx - 1] as { close: number }).close,
+      "main",
+    );
+    return { ...base, bars: bars as never };
+  };
+
+  it("2 天前涨停 → 拦下（属「第 2–3 日」）", () => {
+    expect(evalYesterday(withLimitUpAt(2)).ok).toBe(false);
+  });
+
+  it("3 天前涨停 → 拦下", () => {
+    expect(evalYesterday(withLimitUpAt(3)).ok).toBe(false);
+  });
+
+  it("4 天前涨停 → 通过（窗口之外）", () => {
+    expect(evalYesterday(withLimitUpAt(4)).ok).toBe(true);
+  });
+});
+
+describe("X-highLimitUp 的「高位」是刻意细化过的：前一根也在 MA100 之上", () => {
+  const evalHigh = (security: Parameters<typeof buildContext>[0]) =>
+    rule("X-highLimitUp").evaluate(
+      buildContext(security, paramsFor("standard"), { ...DEFAULT_CRITERIA, strictness: "standard" }),
+    );
+
+  const withLimitUp = (closes: (bars: { close: number }[]) => void) => {
+    const base = goodSecurity();
+    const bars = base.bars.map((b) => ({ ...b })) as { close: number }[];
+    const n = bars.length;
+    bars[n - 1]!.close = limitUpPrice(bars[n - 2]!.close, "main");
+    closes(bars);
+    return { ...base, bars: bars as never };
+  };
+
+  it("涨停且前一根也在 MA100 之上 → 高位涨停，拦下", () => {
+    expect(evalHigh(withLimitUp(() => {})).ok).toBe(false);
+  });
+
+  it("从下方涨停收复 MA100 → 不算高位（那正是 S12 的形状）", () => {
+    // 末两根一起压到远低于 MA100，再让末根跳到前一根的涨停价
+    const outcome = evalHigh(
+      withLimitUp((bars) => {
+        const n = bars.length;
+        bars[n - 2]!.close = 1;
+        bars[n - 1]!.close = limitUpPrice(1, "main");
+      }),
+    );
+    expect(outcome.ok).toBe(true);
+    expect(outcome.detail).toContain("收复");
+  });
+});
