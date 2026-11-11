@@ -19,9 +19,7 @@ import { openMarketStore } from "../src/market/open.js";
 import { fromDateKey, toDateKey } from "../src/market/qlib.js";
 import type { Board } from "../src/market/qlib.js";
 import { DEFAULT_BACKTEST_PARAMS } from "../src/backtest/params.js";
-import { backtestStock } from "../src/backtest/engine.js";
-import { detectLimits, isStName, limitRatiosFor } from "../src/backtest/limits.js";
-import { buildAmountRankIndex, eligibilityFlags } from "../src/backtest/universe.js";
+import { runBacktest } from "../src/backtest/service.js";
 import { summarize } from "../src/backtest/metrics.js";
 import {
   renderReport,
@@ -29,7 +27,7 @@ import {
   tradesToCsv,
   type ReportContext,
 } from "../src/backtest/report.js";
-import type { BacktestParams, StockResult } from "../src/backtest/types.js";
+import type { BacktestParams } from "../src/backtest/types.js";
 
 const BACKEND_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -169,15 +167,6 @@ function parseArgs(argv: string[]): Options {
   return opts;
 }
 
-/** 确定性等距抽样：不改变代码顺序偏好，也能覆盖各板块。 */
-function sample<T>(items: readonly T[], limit: number | null): T[] {
-  if (limit === null || items.length <= limit) return [...items];
-  const stride = items.length / limit;
-  const out: T[] = [];
-  for (let i = 0; i < limit; i++) out.push(items[Math.floor(i * stride)] as T);
-  return out;
-}
-
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
   const params: BacktestParams = {
@@ -195,81 +184,39 @@ async function main(): Promise<void> {
   try {
     const latest = store.latestTradeDate();
     if (latest === null) throw new Error("库内没有日线：先跑 npm run bootstrap:kline");
-    const toDate = opts.to === null ? latest : Math.min(opts.to, latest);
+    const requestedTo = opts.to === null ? latest : opts.to;
     const fromDate = opts.from;
-    if (fromDate >= toDate) throw new Error(`回测区间为空：${fromDateKey(fromDate)} → ${fromDateKey(toDate)}`);
-
-    // 宇宙窗口需要 fromDate 之前的交易日；同理指标需要更早的 K 线（直接读全量历史）。
-    const warmup = store.recentTradingDates(fromDate, params.hotWindow).filter((date) => date < fromDate);
-    const rangeDates = store.calendarDatesBetween(fromDate, toDate);
-    if (rangeDates.length === 0) throw new Error("交易日历为空；库可能不完整，先跑 npm run verify:invariants");
-    const hotDates = [...warmup, ...rangeDates];
-
-    console.error(
-      `基准数据：${fromDateKey(fromDate)} → ${fromDateKey(toDate)}，${rangeDates.length} 个交易日；` +
-        `库内最新 ${fromDateKey(latest)}`,
-    );
-    console.error(`构建「成交额 Top-${params.hotTopN}」热门代理（${hotDates.length} 个交易日）…`);
-    const started = Date.now();
-    const hotIndex = buildAmountRankIndex(store, hotDates, params.hotTopN);
-
-    const instruments = store
-      .listInstruments()
-      .filter((row) => row.board !== "index")
-      .filter((row) => opts.boards === null || opts.boards.includes(row.board));
-    const universeRows = sample(instruments, opts.maxStocks);
-
-    const results: StockResult[] = [];
-    const windowStats = {
-      instruments: universeRows.length,
-      noBarsInRange: 0,
-      shortSample: 0,
-      backtested: 0,
-    };
-
-    let processed = 0;
-    for (const row of universeRows) {
-      processed++;
-      if (processed % 500 === 0) {
-        console.error(`  … ${processed}/${universeRows.length}（${((Date.now() - started) / 1000).toFixed(0)}s）`);
-      }
-
-      const bars = store.readBarsUpTo(row.code, toDate);
-      if (bars.length === 0 || (bars[bars.length - 1] as { date: number }).date < fromDate) {
-        windowStats.noBarsInRange++;
-        continue;
-      }
-
-      const limits = detectLimits(bars, {
-        ratios: limitRatiosFor(row.board, isStName(row.name)),
-      });
-      const eligible = eligibilityFlags(bars, row.code, hotIndex, limits.upClose, params.hotWindow);
-
-      const result = backtestStock(
-        { code: row.code, name: row.name, board: row.board, bars, eligible },
-        { params, fromDate, toDate, keepEquityCurve: false },
-      );
-      if (result === null) {
-        windowStats.shortSample++;
-        continue;
-      }
-      windowStats.backtested++;
-      results.push(result);
+    if (fromDate >= requestedTo) {
+      throw new Error(`回测区间为空：${fromDateKey(fromDate)} → ${fromDateKey(requestedTo)}`);
     }
 
-    const summary = summarize(results);
+    console.error(
+      `基准数据：${fromDateKey(fromDate)} → ${fromDateKey(Math.min(requestedTo, latest))}；库内最新 ${fromDateKey(latest)}`,
+    );
+    const started = Date.now();
+    const run = runBacktest(store, {
+      fromDate,
+      toDate: requestedTo,
+      params,
+      boards: opts.boards,
+      maxStocks: opts.maxStocks,
+    });
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+    const results = run.results;
+    const windowStats = run.stats;
+
+    const summary = summarize(results);
 
     const context: ReportContext = {
       generatedAt: new Date().toISOString(),
       dbPath: opts.db,
       dataLatestDate: latest,
       fromDate,
-      toDate,
+      toDate: Math.min(requestedTo, latest),
       universeLabel:
         `成交额横截面排名前 ${params.hotTopN}（代理「热门列表」）+ ` +
         `${params.hotWindow} 个交易日内至少一次收盘涨停`,
-      hotCalendarDays: hotDates.length,
+      hotCalendarDays: run.hotCalendarDays,
       params,
       window: windowStats,
       command: `npm run backtest:kdj -- ${process.argv.slice(2).join(" ")}`.trim(),

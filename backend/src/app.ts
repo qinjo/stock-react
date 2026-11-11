@@ -4,6 +4,8 @@ import { dataRoutes } from "./routes/data.js";
 import { analyzeRoutes } from "./routes/analyze.js";
 import { fundamentalsRoutes } from "./routes/fundamentals.js";
 import { screenerRoutes, type ScreenerRouteDeps } from "./routes/screener.js";
+import { backtestRoutes, type BacktestRouteDeps } from "./routes/backtest.js";
+import type { BacktestResponse } from "./backtest/response.js";
 import type { ScreenResponse } from "./screener/response.js";
 import { runIncrement } from "./market/increment.js";
 import { DEFAULT_MODEL, createDeepSeekChat, type ChatFn } from "./analysis/llm.js";
@@ -25,6 +27,10 @@ export type BuildAppOptions = {
   screener?: ScreenerRouteDeps;
   /** 筛选结果缓存 TTL（毫秒）；默认 6 小时，可用 SCREEN_CACHE_TTL_MS 覆盖 */
   screenCacheTtlMs?: number;
+  /** 回测路由依赖：测试注入临时日K库 */
+  backtest?: BacktestRouteDeps;
+  /** 回测结果缓存 TTL（毫秒）；默认 6 小时，可用 BACKTEST_CACHE_TTL_MS 覆盖 */
+  backtestCacheTtlMs?: number;
 };
 
 /**
@@ -66,9 +72,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     200,
   );
 
+  // 回测结果缓存：键含数据截止日与全部参数，因此"数据一变就失效"；
+  // 全市场一次约 40–60 秒，同一天同参数没有理由再算一遍。
+  const backtestCacheTtlMs =
+    options.backtestCacheTtlMs ?? Number(process.env.BACKTEST_CACHE_TTL_MS ?? 6 * 60 * 60 * 1000);
+  const backtestCache = new PromptCache<BacktestResponse>(
+    Number.isFinite(backtestCacheTtlMs) && backtestCacheTtlMs > 0
+      ? backtestCacheTtlMs
+      : 6 * 60 * 60 * 1000,
+    20,
+  );
+
   app.register(dataRoutes);
   app.register(fundamentalsRoutes);
   app.register(async (instance) => analyzeRoutes(instance, { chat, model, cache }));
+  app.register(async (instance) =>
+    backtestRoutes(instance, { cache: backtestCache, ...(options.backtest ?? {}) }),
+  );
   app.register(async (instance) =>
     screenerRoutes(instance, {
       // 生产走真实增量；测试必须显式注入假实现（类型上也是必填）

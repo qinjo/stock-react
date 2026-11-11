@@ -508,3 +508,22 @@ describe("顶部模式切换与筛选器联通（#16）", () => {
     expect(screen.getByTestId("kline-container")).toBeInTheDocument();
   });
 });
+
+describe("顶部模式切换：策略回测 tab（#33）", () => {
+  it("切到回测后显示回测表单与说明，页签状态一致", async () => {
+    stubRoutes([["/api/health", health]]);
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "策略回测" }));
+
+    expect(screen.getByRole("button", { name: "策略回测" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "开始回测" })).toBeInTheDocument();
+    // 头部说明切换成回测口径，单票分析的提示不再出现
+    expect(screen.getByText(/热门\+涨停/)).toBeInTheDocument();
+    expect(screen.queryByText(/输入股票代码或名称/)).not.toBeInTheDocument();
+  });
+});

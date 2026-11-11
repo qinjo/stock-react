@@ -2,6 +2,7 @@ import {
   ApiError,
   type AnalyzeResponse,
   type ApiErrorBody,
+  type BacktestResponse,
   type BoardName,
   type Fundamentals,
   type Indicators,
@@ -107,4 +108,35 @@ export function getScreen(query: ScreenQuery = {}): Promise<ScreenResponse> {
 
   const suffix = search.toString();
   return request<ScreenResponse>(`/api/screen${suffix ? `?${suffix}` : ""}`);
+}
+
+/* ----------------------------- 策略回测 (#33) ----------------------------- */
+
+export type BacktestQuery = {
+  from?: string;
+  to?: string;
+  hotTop?: number;
+  window?: number;
+  /** 抽样上限；0 或省略 = 全市场 */
+  sample?: number;
+  boards?: BoardName[];
+  refresh?: boolean;
+};
+
+/**
+ * 跑一次策略回测。全市场首次约 40–60 秒（后端分片执行，不阻塞其它请求），
+ * 同一天同参数第二次请求会命中缓存。库未初始化时抛 `DATA_NOT_READY`。
+ */
+export function getBacktest(query: BacktestQuery = {}): Promise<BacktestResponse> {
+  const search = new URLSearchParams();
+  if (query.from) search.set("from", query.from);
+  if (query.to) search.set("to", query.to);
+  if (query.hotTop !== undefined) search.set("hotTop", String(query.hotTop));
+  if (query.window !== undefined) search.set("window", String(query.window));
+  if (query.sample !== undefined && query.sample > 0) search.set("sample", String(query.sample));
+  if (query.boards && query.boards.length > 0) search.set("boards", query.boards.join(","));
+  if (query.refresh) search.set("refresh", "true");
+
+  const suffix = search.toString();
+  return request<BacktestResponse>(`/api/backtest${suffix ? `?${suffix}` : ""}`);
 }

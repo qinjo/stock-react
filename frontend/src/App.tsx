@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AnalysisPanel from "./components/AnalysisPanel";
+import BacktestPanel from "./components/BacktestPanel";
 import FundamentalsPanel from "./components/FundamentalsPanel";
 import IndicatorPanel from "./components/IndicatorPanel";
 import KlineChart from "./components/KlineChart";
@@ -36,18 +37,19 @@ type StockState =
     }
   | { kind: "error"; code: ApiErrorCode; message: string };
 
-/** 顶部模式页签：单票分析｜短线筛选器（不引入路由） */
-const MODE_TABS: Array<{ value: "single" | "screener"; label: string }> = [
+/** 顶部模式页签：单票分析｜短线筛选器｜策略回测（不引入路由） */
+const MODE_TABS: Array<{ value: "single" | "screener" | "backtest"; label: string }> = [
   { value: "single", label: "单票分析" },
   { value: "screener", label: "短线筛选器" },
+  { value: "backtest", label: "策略回测" },
 ];
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [stock, setStock] = useState<StockState>({ kind: "idle" });
-  /** 顶部模式：单票分析｜短线筛选器（不引入路由） */
-  const [mode, setMode] = useState<"single" | "screener">("single");
+  /** 顶部模式：单票分析｜短线筛选器｜策略回测（不引入路由） */
+  const [mode, setMode] = useState<"single" | "screener" | "backtest">("single");
 
   // 后端连通状态（T1）
   useEffect(() => {
@@ -113,7 +115,9 @@ export default function App() {
             <p className="mt-1 text-sm text-slate-500">
               {mode === "single"
                 ? "输入股票代码或名称，获取行情、技术指标与 AI 分析"
-                : "按《短线操盘实战技法》的规则筛选全市场，点候选股进入单票分析"}
+                : mode === "screener"
+                  ? "按《短线操盘实战技法》的规则筛选全市场，点候选股进入单票分析"
+                  : "把「热门+涨停 → KDJ 金叉买/死叉清」这套规则在历史上机械回放，看它在不同股票上的表现"}
             </p>
           </div>
           <nav className="flex gap-1" aria-label="模式切换">
@@ -139,6 +143,8 @@ export default function App() {
       <main className="w-full space-y-6 px-6 py-8 lg:px-10">
         {mode === "screener" ? (
           <ScreenerPanel onPick={handlePickFromScreener} />
+        ) : mode === "backtest" ? (
+          <BacktestPanel />
         ) : (
           <>
             <div className="max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

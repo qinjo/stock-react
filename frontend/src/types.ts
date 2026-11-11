@@ -436,3 +436,95 @@ export type IncrementSummary = {
   skippedTotal: number;
   durationMs: number;
 };
+
+/* --------------------------- 策略回测（#33） --------------------------- */
+
+export type BacktestSummary = {
+  stocks: number;
+  tradedStocks: number;
+  trades: number;
+  openTrades: number;
+  wins: number;
+  winRate: number | null;
+  avgNetReturn: number | null;
+  medianNetReturn: number | null;
+  profitFactor: number | null;
+  maxLoss: number | null;
+  avgHoldingDays: number | null;
+  avgTotalReturn: number | null;
+  medianTotalReturn: number | null;
+  p25TotalReturn: number | null;
+  p75TotalReturn: number | null;
+  avgBuyHold: number | null;
+  medianBuyHold: number | null;
+  beatBuyHoldStocks: number;
+  stocksWithBuyHold: number;
+  avgMaxDrawdown: number | null;
+  eligibleSignals: number;
+  unfilledSignals: number;
+};
+
+export type BacktestBucket = {
+  key: string;
+  trades: number;
+  wins: number;
+  winRate: number | null;
+  avgNetReturn: number | null;
+  medianNetReturn: number | null;
+};
+
+export type BacktestStockRow = {
+  code: string;
+  name: string | null;
+  board: string;
+  boardLabel: string;
+  trades: number;
+  winRate: number | null;
+  totalReturn: number;
+  buyHoldReturn: number | null;
+  maxDrawdown: number;
+};
+
+export type BacktestWindowStats = {
+  instruments: number;
+  noBarsInRange: number;
+  shortSample: number;
+  backtested: number;
+};
+
+export type BacktestParamsEcho = {
+  kdjPeriod: number;
+  kdjKSmooth: number;
+  kdjDSmooth: number;
+  hotWindow: number;
+  hotTopN: number;
+  minBars: number;
+  capital: number;
+  commissionRate: number;
+  commissionMin: number;
+  stampTaxRate: number;
+  transferFeeRate: number;
+};
+
+/**
+ * 回测响应（与后端 `backtest/response.ts` 对应）。
+ *
+ * 刻意不含逐日权益曲线与全部交易：全市场约万笔交易，明细走 CLI 导出的 CSV。
+ */
+export type BacktestResponse = {
+  status: "ok";
+  dataDate: string;
+  from: string;
+  to: string;
+  params: BacktestParamsEcho;
+  universe: string;
+  sample: number | null;
+  window: BacktestWindowStats;
+  summary: BacktestSummary;
+  tradedSummary: BacktestSummary;
+  buckets: { year: BacktestBucket[]; board: BacktestBucket[] };
+  histogram: Array<{ from: number; to: number; count: number }>;
+  stocks: { traded: number; best: BacktestStockRow[]; worst: BacktestStockRow[] };
+  elapsedMs: number;
+  fromCache: boolean;
+};
