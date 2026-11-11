@@ -23,5 +23,8 @@ dist/
 # 本地日K库与 bootstrap 产物：可再生的构建产物，不是源码（重建见 backend/package.json 的 bootstrap:kline）
 backend/data/
 
+# 回测报告与导出：一次运行的产物，含时间戳，不入库
+backend/reports/
+
 # 系统文件
 .DS_Store

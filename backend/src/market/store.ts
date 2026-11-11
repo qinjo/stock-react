@@ -133,6 +133,7 @@ export class MarketStore {
   migrate(): void {
     this.db.exec(SCHEMA);
     this.ensureValuationDateIndex();
+    this.ensureBarsDateIndex();
     this.addColumnIfMissing("instruments", "float_market_cap", "REAL");
     this.setMeta("schema_version", SCHEMA_VERSION);
   }
@@ -154,12 +155,17 @@ export class MarketStore {
   optimizeForBulkLoad(): void {
     this.db.exec("PRAGMA journal_mode = OFF");
     this.db.exec("PRAGMA synchronous = OFF");
+    // 批量灌库时不要维护横截面索引：七百万行逐行改索引比最后一次性建索引慢得多。
+    // 索引在 restoreDurability() 里重建。
+    this.db.exec("DROP INDEX IF EXISTS idx_bars_date");
+    this.db.exec("DROP INDEX IF EXISTS idx_bars_date_amount");
   }
 
   /** 写入完成后恢复常规耐久性设置。 */
   restoreDurability(): void {
     this.db.exec("PRAGMA synchronous = NORMAL");
     this.db.exec("PRAGMA journal_mode = WAL");
+    this.ensureBarsDateIndex();
   }
 
   private prepare(sql: string): StatementSync {
@@ -337,6 +343,28 @@ export class MarketStore {
     this.db.exec("CREATE INDEX IF NOT EXISTS idx_valuation_date ON valuation(date)");
   }
 
+  /**
+   * 日线表的横截面索引：`(date, amount)`。回测按日取"成交额排名前 N"依赖它。
+   *
+   * 主键是 `(code, date)`，`WHERE date = ?` 用不上主键前缀；而**排序**才是真正的瓶颈——
+   * 先用单列 `(date)` 索引取全市场再排序，实测 1393 个交易日要 39 秒。
+   * 复合索引 `(date, amount)` 让 `ORDER BY amount DESC LIMIT N` 直接反向扫索引前缀，
+   * 同一条查询降到 0.3 秒（实测 2026-11-11）。旧的单列索引已被它覆盖，迁移时删掉。
+   *
+   * bootstrap 灌库前会 DROP 掉它：批量写入时维护索引比最后建一次慢得多。
+   */
+  private ensureBarsDateIndex(): void {
+    this.db.exec("DROP INDEX IF EXISTS idx_bars_date");
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_bars_date_amount ON bars(date, amount)");
+  }
+
+  /** 某个交易日成交额前 `limit` 名（只取有成交的行），供回测的"成交额排名"宇宙使用。 */
+  readDayTopAmounts(date: number, limit: number): Array<{ code: string; amount: number }> {
+    return this.prepare(
+      "SELECT code, amount FROM bars WHERE date = ? AND amount > 0 ORDER BY amount DESC LIMIT ?",
+    ).all(date, limit) as unknown as Array<{ code: string; amount: number }>;
+  }
+
   /** 估值表里最新的交易日；空表返回 null。 */
   latestValuationDate(): number | null {
     const row = this.prepare("SELECT MAX(date) AS d FROM valuation").get() as RawBar | undefined;
@@ -442,12 +470,19 @@ export class MarketStore {
   }
 
   /**
-   * 回放专用：读截至 `asOf` 的最近 `limit` 根（含当天）。
+   * 回放专用：读截至 `asOf` 的最近 `limit` 根（含当天）；省略 `limit` 表示读全部历史。
    *
    * 历史回放必须**截断**序列——否则等于用未来数据做筛选，
    * 那是最典型的未来函数，结果会好得毫无意义。
+   * 回测需要从上市起的完整序列（指标预热 + 信号日早于区间起点），所以支持不传 `limit`。
    */
-  readBarsUpTo(code: string, asOf: number, limit: number): BarRow[] {
+  readBarsUpTo(code: string, asOf: number, limit?: number): BarRow[] {
+    if (limit === undefined) {
+      return this.prepare(
+        `SELECT date, open, high, low, close, volume, amount, adj_factor AS adjFactor
+         FROM bars WHERE code = ? AND date <= ? ORDER BY date`,
+      ).all(code, asOf) as unknown as BarRow[];
+    }
     const rows = this.prepare(
       `SELECT date, open, high, low, close, volume, amount, adj_factor AS adjFactor
        FROM bars WHERE code = ? AND date <= ? ORDER BY date DESC LIMIT ?`,
