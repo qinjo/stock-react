@@ -3,6 +3,7 @@ import { getAnalysis } from "../api";
 import { ApiError, type AnalyzeResponse, type ApiErrorCode } from "../types";
 import RatingCard from "./RatingCard";
 import AnalysisReport from "./AnalysisReport";
+import { Panel } from "./ui/Panel";
 
 type Props = {
   code: string;
@@ -57,41 +58,45 @@ export default function AnalysisPanel({ code, name }: Props) {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div>
-          <h2 className="text-sm font-medium text-slate-700">AI 分析</h2>
-          <p className="mt-0.5 text-xs text-slate-400">
-            由大模型基于上方行情与派生指标生成，耗时约 10–60 秒
+      {/* 操作栏：标题 + 说明 + 主按钮；空状态下内容区不占位 */}
+      <Panel
+        title="AI 分析"
+        meta="由大模型基于上方行情与派生指标生成，耗时约 10–60 秒"
+        actions={
+          <button
+            type="button"
+            onClick={run}
+            disabled={state.kind === "loading"}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {state.kind === "loading"
+              ? "分析中…"
+              : state.kind === "idle"
+                ? "开始 AI 分析"
+                : "重新分析"}
+          </button>
+        }
+        bodyClassName={state.kind === "idle" || state.kind === "ok" ? "" : "space-y-3 px-4 pb-4"}
+      >
+        {state.kind === "loading" && (
+          <p className="text-sm text-slate-500" role="status">
+            正在调用模型分析 {name}…
           </p>
-        </div>
-        <button
-          type="button"
-          onClick={run}
-          disabled={state.kind === "loading"}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          {state.kind === "loading" ? "分析中…" : state.kind === "idle" ? "开始 AI 分析" : "重新分析"}
-        </button>
-      </div>
+        )}
 
-      {state.kind === "loading" && (
-        <p className="text-sm text-slate-500" role="status">
-          正在调用模型分析 {name}…
-        </p>
-      )}
-
-      {state.kind === "error" && (
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
-        >
-          <p className="font-medium">{ERROR_COPY[state.code]?.title ?? "分析失败"}</p>
-          <p className="mt-1">{state.message}</p>
-          {ERROR_COPY[state.code]?.hint && (
-            <p className="mt-1 text-xs">{ERROR_COPY[state.code]!.hint}</p>
-          )}
-        </div>
-      )}
+        {state.kind === "error" && (
+          <div
+            role="alert"
+            className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+          >
+            <p className="font-medium">{ERROR_COPY[state.code]?.title ?? "分析失败"}</p>
+            <p className="mt-1">{state.message}</p>
+            {ERROR_COPY[state.code]?.hint && (
+              <p className="mt-1 text-xs">{ERROR_COPY[state.code]!.hint}</p>
+            )}
+          </div>
+        )}
+      </Panel>
 
       {state.kind === "ok" && (
         <>
@@ -103,7 +108,7 @@ export default function AnalysisPanel({ code, name }: Props) {
             usage={state.data.usage}
           />
           <AnalysisReport analysis={state.data.analysis} />
-          <p className="text-xs text-slate-400">数据截至：{state.data.input.dataDate}</p>
+          <p className="px-1 text-xs text-slate-400">数据截至：{state.data.input.dataDate}</p>
         </>
       )}
     </section>

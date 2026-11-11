@@ -43,40 +43,40 @@ export function CandidateCard({
   const strongest = candidate.signals.signals[0] ?? null;
 
   return (
-    <li className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-wrap items-baseline gap-2">
           <button
             type="button"
             onClick={() => onPick({ code: candidate.code, name: candidate.name ?? candidate.code })}
-            className="text-sm font-medium text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+            className="text-base font-semibold text-slate-900 underline decoration-slate-300 decoration-1 underline-offset-2 hover:decoration-slate-900"
           >
             {candidate.name ?? candidate.code}
           </button>
-          <span className="text-xs text-slate-400">{candidate.code}</span>
+          <span className="tabular-nums text-xs text-slate-400">{candidate.code}</span>
           {candidate.signalTier !== null && (
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">
               档{candidate.signalTier} · {tierLabel(mode, candidate.signalTier)}
             </span>
           )}
         </div>
         <div className="flex items-baseline gap-3 text-sm">
-          <span className="font-medium text-slate-900">{price(candidate.price)}</span>
-          <span className={signClass(candidate.changePercent)}>
+          <span className="font-medium tabular-nums text-slate-900">{price(candidate.price)}</span>
+          <span className={`tabular-nums ${signClass(candidate.changePercent)}`}>
             {candidate.changePercent === null ? "—" : `${candidate.changePercent.toFixed(2)}%`}
           </span>
         </div>
       </div>
 
       {candidate.reasoning && (
-        <p className="mt-2 text-xs text-slate-600">
+        <p className="mt-2.5 text-xs leading-relaxed text-slate-600">
           <span className="rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700">AI 复核</span>
           <span className="ml-1.5">{candidate.reasoning}</span>
         </p>
       )}
 
       {strongest && (
-        <p className="mt-2 text-xs text-slate-600">
+        <p className="mt-2 text-xs leading-relaxed text-slate-600">
           <span className="text-slate-400">信号：</span>
           <span className="font-medium text-slate-800">{strongest.label}</span>
           <span className="ml-1 text-slate-400">（书 {strongest.bookRef}）</span>
@@ -88,8 +88,8 @@ export function CandidateCard({
         离场计划：源书的逻辑是"跟随趋势直到结构被破坏"，而不是"到价卖出"，
         所以这里给的是止损位、失效条件与分批止盈，**不给目标价**。
       */}
-      <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
-        <p className="text-xs text-slate-700">
+      <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+        <p className="text-xs tabular-nums text-slate-700">
           <span className="text-slate-400">入场 </span>
           <span className="font-medium">{price(exit.entry)}</span>
           <span className="mx-1.5 text-slate-300">|</span>
@@ -99,11 +99,11 @@ export function CandidateCard({
             （{exit.stopBasisLabel}，空间 {(exit.stopSpace * 100).toFixed(1)}%）
           </span>
         </p>
-        <p className="mt-1 text-xs text-slate-600">
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">
           <span className="text-slate-400">失效：</span>
           {exit.invalidation}
         </p>
-        <p className="mt-0.5 text-xs text-slate-600">
+        <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
           <span className="text-slate-400">止盈：</span>
           {exit.scaleOut}
         </p>
@@ -114,17 +114,17 @@ export function CandidateCard({
           {candidate.resistance.map((item) => (
             <li key={item.kind}>
               <span className="text-slate-400">参考压力位 </span>
-              <span className="font-medium text-slate-800">{price(item.price)}</span>
+              <span className="font-medium tabular-nums text-slate-800">{price(item.price)}</span>
               <span className="ml-1 text-slate-400">{item.detail}</span>
             </li>
           ))}
         </ul>
       )}
 
-      <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <dl className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-xs">
         <div className="flex gap-1">
           <dt className="text-slate-500">MA100 偏离</dt>
-          <dd className="font-medium text-slate-800">{pct(metrics.ma100Deviation)}</dd>
+          <dd className="font-medium tabular-nums text-slate-800">{pct(metrics.ma100Deviation)}</dd>
         </div>
         <div className="flex gap-1">
           <dt className="text-slate-500">上穿 MA100</dt>
@@ -134,12 +134,12 @@ export function CandidateCard({
         </div>
         <div className="flex gap-1">
           <dt className="text-slate-500">成交额</dt>
-          <dd className="font-medium text-slate-800">{money(metrics.turnoverAmount)}</dd>
+          <dd className="font-medium tabular-nums text-slate-800">{money(metrics.turnoverAmount)}</dd>
         </div>
         {metrics.floatMarketCap !== null && (
           <div className="flex gap-1">
             <dt className="text-slate-500">流通市值</dt>
-            <dd className="font-medium text-slate-800">{money(metrics.floatMarketCap)}</dd>
+            <dd className="font-medium tabular-nums text-slate-800">{money(metrics.floatMarketCap)}</dd>
           </div>
         )}
       </dl>
@@ -156,7 +156,7 @@ export function CandidateCard({
 
       <RuleDetails hits={candidate.ruleHits} />
 
-      <p className="mt-2 text-[11px] text-slate-400">
+      <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
         规则生成，非投资建议。命中 {candidate.ruleHits.length} 条规则判定。
         {/* 与顶部横幅用同一句话，避免同一件事两种说法 */}
         {unreviewed && <span className="ml-1 text-amber-700">· 未经大模型复核</span>}

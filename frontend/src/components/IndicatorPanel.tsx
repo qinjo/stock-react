@@ -1,3 +1,4 @@
+import { Panel } from "./ui/Panel";
 import type { Indicators } from "../types";
 
 type Props = {
@@ -66,23 +67,24 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
   ];
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-slate-700">技术指标</h2>
-        <p className="text-xs text-slate-400">
-          {ind.sampleSize} 根日K · {ind.fromDate} → {ind.toDate}
-        </p>
-      </header>
-
-      <div className="mt-3 grid grid-cols-3 gap-3">
+    <Panel
+      title="技术指标"
+      /* meta 保持纯文本子节点：测试按整段文本（250 根日K / 区间）查询 */
+      meta={`${ind.sampleSize} 根日K · ${ind.fromDate} → ${ind.toDate}`}
+      bodyClassName="space-y-3 p-4"
+    >
+      {/* 面板现在占满整行：窄屏两列、宽屏三组并排 */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
         {cells.map(({ group, items }) => (
           <div key={group}>
-            <p className="text-xs font-medium text-slate-400">{group}</p>
-            <dl className="mt-1 space-y-0.5">
+            <p className="text-xs font-semibold text-slate-500">{group}</p>
+            <dl className="mt-1.5 space-y-1">
               {items.map(([label, value, color]) => (
                 <div key={label} className="flex items-baseline justify-between gap-2">
                   <dt className="text-xs text-slate-500">{label}</dt>
-                  <dd className={`text-xs font-medium ${color ?? "text-slate-800"}`}>{value}</dd>
+                  <dd className={`text-xs font-medium tabular-nums ${color ?? "text-slate-800"}`}>
+                    {value}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -90,22 +92,22 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
         ))}
       </div>
 
-      <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-slate-100 pt-2 text-xs">
+      <dl className="flex flex-wrap gap-x-5 gap-y-1 border-t border-slate-100 pt-2.5 text-xs">
         <div className="flex gap-1.5">
           <dt className="text-slate-500">近20日</dt>
-          <dd className={`font-medium ${signClass(ind.return20d)}`}>
+          <dd className={`font-medium tabular-nums ${signClass(ind.return20d)}`}>
             {fmt(ind.return20d, 2, "%")}
           </dd>
         </div>
         <div className="flex gap-1.5">
           <dt className="text-slate-500">近60日</dt>
-          <dd className={`font-medium ${signClass(ind.return60d)}`}>
+          <dd className={`font-medium tabular-nums ${signClass(ind.return60d)}`}>
             {fmt(ind.return60d, 2, "%")}
           </dd>
         </div>
         <div className="flex gap-1.5">
           <dt className="text-slate-500">区间位置</dt>
-          <dd className="font-medium text-slate-800">
+          <dd className="font-medium tabular-nums text-slate-800">
             {fmt(ind.positionInRange, 1, "%")}
             <span className="ml-1 font-normal text-slate-400">
               （{fmt(ind.periodLow)}–{fmt(ind.periodHigh)}）
@@ -114,7 +116,7 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
         </div>
         <div className="flex gap-1.5">
           <dt className="text-slate-500">MACD</dt>
-          <dd className="text-slate-500">
+          <dd className="tabular-nums text-slate-500">
             DIF {fmt(ind.macd.dif)} / DEA {fmt(ind.macd.dea)} · {macdState}
           </dd>
         </div>
@@ -124,19 +126,21 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
         书的均线阶梯单独成块：源书只给均线参数、不研究量价，
         MA100 是它唯一的选股分界线，所以这里把 MA100 视觉上单独提出来。
       */}
-      <div className="mt-3 border-t border-slate-100 pt-2">
-        <p className="text-xs text-slate-400">
+      <div className="border-t border-slate-100 pt-2.5">
+        <p className="text-xs font-semibold text-slate-500">
           均线阶梯
-          <span className="ml-1 text-slate-300">（书里的选股分界线：收盘价 &gt; MA100）</span>
+          <span className="ml-1 font-normal text-slate-400">
+            （书里的选股分界线：收盘价 &gt; MA100）
+          </span>
         </p>
-        <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <dl className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {maLadder.map(({ label, value }) => (
             <div key={label} className="flex gap-1.5">
               <dt className={label === "MA100" ? "font-medium text-slate-700" : "text-slate-500"}>
                 {label}
               </dt>
               <dd
-                className={`font-medium ${
+                className={`font-medium tabular-nums ${
                   label === "MA100" ? "text-slate-900" : "text-slate-800"
                 }`}
               >
@@ -146,19 +150,19 @@ export default function IndicatorPanel({ indicators: ind }: Props) {
           ))}
           <div className="flex gap-1.5">
             <dt className="text-slate-500">偏离MA100</dt>
-            <dd className={`font-medium ${signClass(ind.priceVsMa100)}`}>
+            <dd className={`font-medium tabular-nums ${signClass(ind.priceVsMa100)}`}>
               {fmt(ind.priceVsMa100, 2, "%")}
             </dd>
           </div>
           <div className="flex gap-1.5">
             <dt className="text-slate-500">周线MA20</dt>
-            <dd className="font-medium text-slate-800">
+            <dd className="font-medium tabular-nums text-slate-800">
               {fmt(ind.weeklyMa20)}
               <span className="ml-1 font-normal text-slate-400">（{ind.weeklySampleSize} 周）</span>
             </dd>
           </div>
         </dl>
       </div>
-    </section>
+    </Panel>
   );
 }

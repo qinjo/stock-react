@@ -1,3 +1,4 @@
+import { Panel } from "./ui/Panel";
 import type { Quote } from "../types";
 
 function fmt(v: number | null, digits = 2, suffix = ""): string {
@@ -47,35 +48,44 @@ export default function QuoteCard({ quote, dataDate }: Props) {
   ];
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            {quote.name} <span className="text-sm font-normal text-slate-500">{quote.code}</span>
-          </h2>
-        </div>
-        <div className={`text-right ${priceColor}`}>
-          <div className="text-2xl font-semibold">{fmt(quote.price)}</div>
-          <div className="text-sm">
+    <Panel
+      title={
+        <span className="text-base font-semibold tracking-tight text-slate-900">
+          {quote.name}{" "}
+          <span className="text-xs font-normal tabular-nums text-slate-500">{quote.code}</span>
+        </span>
+      }
+      meta="行情快照 · 与日K同源"
+      actions={
+        <div className={`text-right tabular-nums ${priceColor}`}>
+          <div className="text-2xl font-semibold leading-tight">{fmt(quote.price)}</div>
+          <div className="text-xs font-medium">
             {quote.changePercent === null
               ? "—"
               : `${quote.changePercent > 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%`}
           </div>
         </div>
-      </header>
-
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+      }
+      bodyClassName="p-3.5"
+    >
+      {/* 快照横跨整行渲染，列数随宽度增加；窄屏保持两列不挤 */}
+      <dl className="grid grid-cols-2 gap-x-5 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {cells.map(([label, value]) => (
-          <div key={label} className="flex justify-between border-b border-slate-100 pb-1">
+          <div
+            key={label}
+            className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-1"
+          >
             <dt className="text-xs text-slate-500">{label}</dt>
-            <dd className="text-sm text-slate-800">{value}</dd>
+            <dd className="text-sm tabular-nums text-slate-800">{value}</dd>
           </div>
         ))}
       </dl>
 
       {dataDate && (
-        <p className="mt-3 text-xs text-slate-400">数据截至：{dataDate}（行情快照与日K同源）</p>
+        <p className="mt-3 text-xs text-slate-400">
+          数据截至：{dataDate}（行情快照与日K同源）
+        </p>
       )}
-    </section>
+    </Panel>
   );
 }

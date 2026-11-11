@@ -12,16 +12,16 @@ export function MarketGateBanner({ gate, ignored }: { gate: MarketGate; ignored:
   const positionPct = `${Math.round(gate.positionAdvice * 100)}%`;
 
   return (
-    <div className={`rounded-lg border p-3 text-sm ${style.box}`}>
+    <div className={`rounded-xl border p-3.5 text-sm shadow-sm ${style.box}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="font-medium">大盘门：{style.label}档</p>
+        <p className="text-sm font-semibold">大盘门：{style.label}档</p>
         <p className="text-xs">
           今日建议总仓位
-          <span className="ml-1 font-medium">{positionPct}</span>
+          <span className="ml-1 font-medium tabular-nums">{positionPct}</span>
           <span className="ml-1 opacity-70">（{style.position}）</span>
         </p>
       </div>
-      <p className="mt-1 text-xs opacity-90">{gate.reason}</p>
+      <p className="mt-1 text-xs leading-relaxed opacity-90">{gate.reason}</p>
       {ignored && gate.state === "empty" && (
         <p className="mt-1 text-xs font-medium">
           ⚠ 你已忽略大盘门：以下候选是在违反书的择时前提（跌破 MA100 应停手）的情况下给出的。

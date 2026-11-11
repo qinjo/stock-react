@@ -9,6 +9,8 @@ vi.mock("klinecharts", () => {
     createIndicator: vi.fn(),
     setSymbol: vi.fn(),
     setPeriod: vi.fn(),
+    // 红涨绿跌的 candle/indicator 样式（生产代码会调用，stub 需保持 API 完整）
+    setStyles: vi.fn(),
     resize: vi.fn(),
   };
   return {

@@ -51,9 +51,12 @@
 
 ## 界面布局
 
-顶部是三个模式 tab：**单票分析｜短线筛选器｜策略回测**。前两个共用一个搜索/候选入口，回测 tab 只读本地日K库、不需要联网。
+外壳参考 [Vibe-Research](https://github.com/simonlin1212/Vibe-Research) 的工作台结构：**左侧栏目导航 + 顶部面包屑栏 + 灰底卡片面板**；视觉仍保持浅色 slate 主题（不引入深色/橙色品牌色与外部字体，离线可用）。布局决策见 [ADR-0006](docs/adr/0006-ui-layout-sidebar-panels.md)。
 
-单票分析宽屏采用**两栏**：左栏为行情（身份快照 + K 线 + 技术指标）并启用 `sticky`，右栏为 AI 分析（信号卡 + 五节报告）。这样阅读长报告时行情与图表不会滚走，便于随时对照；窄屏自动降级为单列堆叠。
+- **左侧导航**是三个一级栏目：单票分析｜短线筛选器｜策略回测。只渲染一份导航 DOM，窄屏自动折叠成顶部横向栏；顶部栏显示面包屑与后端连通状态。
+- **单票分析**：单列全宽，一块信息占一行——搜索卡片 → 行情快照 → 日 K 走势 → 技术指标 → 基本面与估值 → AI 分析（K 线一行显示全，不做左右分栏）；窄屏同样单列堆叠。前两个栏目共用搜索/候选入口，回测只读本地日K库、不需要联网。
+- **短线筛选器 / 策略回测**：参数收进一张面板（主按钮在标题栏），结果按面板切块——漏斗摘要、候选卡、回测统计与分组表共用同一套间距、表头与数字对齐规范。
+- 共享面板容器是 `frontend/src/components/ui/Panel.tsx`；它只做视觉容器，不承担数据逻辑。
 
 ## 架构
 
@@ -238,6 +241,7 @@ cd frontend && npm test   # 128 项：搜索补全、快照卡、图表数据转
 - **权威参数表**：[`docs/screener-params.md`](docs/screener-params.md)——每条规则带 `书 L####` / 推断 / 书外 三级标注，并列出已知开放问题
 - 全市场数据层决策：[`docs/adr/0004-market-wide-screener-data.md`](docs/adr/0004-market-wide-screener-data.md)
 - 回测与热门榜数据层：[`docs/adr/0005-hot-rank-data.md`](docs/adr/0005-hot-rank-data.md)（issue #31 / #32）
+- 界面布局决策：[`docs/adr/0006-ui-layout-sidebar-panels.md`](docs/adr/0006-ui-layout-sidebar-panels.md)（参考 Vibe-Research 的工作台结构，浅色主题；含共享面板容器 `ui/Panel.tsx`）
 - 热门榜历史数据可得性调研：[`docs/research-hot-list-data.md`](docs/research-hot-list-data.md)（全部数字为本机实测）
 - 规则来源（书内原文 + 行号）：[`_research/短线操盘技法-选股规则提炼.md`](_research/短线操盘技法-选股规则提炼.md)
 - 历史回放验收记录：[`docs/verification-replay-2026-09-29.md`](docs/verification-replay-2026-09-29.md)

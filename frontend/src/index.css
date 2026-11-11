@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+/*
+ * 全局样式：不引入外部字体（应用是本地工具，离线也要能开）。
+ * 字体栈优先用系统中文黑体；数字列由 .tabular 统一等宽，扫读时不跳动。
+ */
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono:
+    "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background-color: #f1f5f9; /* slate-100：页面底色，卡片浮在其上 */
+  color: #0f172a; /* slate-900 */
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 数字等宽：价格、涨跌幅、市值等列纵向对齐 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background-color: #cbd5e1; /* slate-300 */
+}

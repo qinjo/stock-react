@@ -4,6 +4,7 @@ import type {
   BacktestStockRow,
   BacktestSummary,
 } from "../../types";
+import { Panel } from "../ui/Panel";
 
 /**
  * 回测结果的纯展示层。
@@ -29,10 +30,10 @@ function num(value: number | null | undefined, digits = 1): string {
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs tabular-nums text-slate-400">{hint}</p>}
     </div>
   );
 }
@@ -56,67 +57,63 @@ function bucketRows(buckets: readonly BacktestBucket[]) {
 
 function BucketTable({ title, buckets }: { title: string; buckets: readonly BacktestBucket[] }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
-      <h3 className="border-b border-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
-        {title}
-      </h3>
+    <Panel title={title} bodyClassName="p-0">
       {buckets.length === 0 ? (
-        <p className="px-3 py-3 text-sm text-slate-500">样本内没有交易。</p>
+        <p className="px-4 py-3 text-sm text-slate-500">样本内没有交易。</p>
       ) : (
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="px-2 py-1 font-medium">分组</th>
-              <th className="px-2 py-1 text-right font-medium">交易数</th>
-              <th className="px-2 py-1 text-right font-medium">胜率</th>
-              <th className="px-2 py-1 text-right font-medium">平均单笔</th>
-            </tr>
-          </thead>
-          <tbody>{bucketRows(buckets)}</tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-slate-400">
+                <th className="px-3 py-1.5 font-medium">分组</th>
+                <th className="px-3 py-1.5 text-right font-medium">交易数</th>
+                <th className="px-3 py-1.5 text-right font-medium">胜率</th>
+                <th className="px-3 py-1.5 text-right font-medium">平均单笔</th>
+              </tr>
+            </thead>
+            <tbody>{bucketRows(buckets)}</tbody>
+          </table>
+        </div>
       )}
-    </div>
+    </Panel>
   );
 }
 
 function StockTable({ title, rows }: { title: string; rows: readonly BacktestStockRow[] }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
-      <h3 className="border-b border-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
-        {title}
-      </h3>
+    <Panel title={title} bodyClassName="p-0">
       {rows.length === 0 ? (
-        <p className="px-3 py-3 text-sm text-slate-500">样本内没有交易。</p>
+        <p className="px-4 py-3 text-sm text-slate-500">样本内没有交易。</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-slate-500">
-                <th className="px-2 py-1 font-medium">代码</th>
-                <th className="px-2 py-1 font-medium">名称</th>
-                <th className="px-2 py-1 text-right font-medium">交易</th>
-                <th className="px-2 py-1 text-right font-medium">胜率</th>
-                <th className="px-2 py-1 text-right font-medium">策略收益</th>
-                <th className="px-2 py-1 text-right font-medium">买入持有</th>
+              <tr className="text-left text-slate-400">
+                <th className="px-3 py-1.5 font-medium">代码</th>
+                <th className="px-3 py-1.5 font-medium">名称</th>
+                <th className="px-3 py-1.5 text-right font-medium">交易</th>
+                <th className="px-3 py-1.5 text-right font-medium">胜率</th>
+                <th className="px-3 py-1.5 text-right font-medium">策略收益</th>
+                <th className="px-3 py-1.5 text-right font-medium">买入持有</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.code} className="border-t border-slate-100">
-                  <td className="px-2 py-1 tabular-nums text-slate-700">{row.code}</td>
-                  <td className="px-2 py-1 text-slate-700">{row.name ?? "—"}</td>
-                  <td className="px-2 py-1 text-right tabular-nums text-slate-700">{row.trades}</td>
-                  <td className="px-2 py-1 text-right tabular-nums text-slate-700">
+                  <td className="px-3 py-1.5 tabular-nums text-slate-700">{row.code}</td>
+                  <td className="px-3 py-1.5 text-slate-700">{row.name ?? "—"}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">{row.trades}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">
                     {pct(row.winRate, 1)}
                   </td>
                   <td
-                    className={`px-2 py-1 text-right tabular-nums ${
+                    className={`px-3 py-1.5 text-right tabular-nums ${
                       row.totalReturn >= 0 ? "text-red-600" : "text-emerald-700"
                     }`}
                   >
                     {pct(row.totalReturn)}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums text-slate-500">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">
                     {pct(row.buyHoldReturn)}
                   </td>
                 </tr>
@@ -125,7 +122,7 @@ function StockTable({ title, rows }: { title: string; rows: readonly BacktestSto
           </table>
         </div>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -135,15 +132,15 @@ function Histogram({ buckets }: { buckets: BacktestResponse["histogram"] }) {
   }
   const max = Math.max(...buckets.map((bucket) => bucket.count));
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-1">
       {buckets.map((bucket) => (
         <div key={bucket.from} className="flex items-center gap-2 text-[11px]">
           <span className="w-20 shrink-0 text-right tabular-nums text-slate-500">
             {pct(bucket.from, 0)}~{pct(bucket.to, 0)}
           </span>
-          <div className="h-2 flex-1 overflow-hidden rounded bg-slate-100">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
             <div
-              className={`h-full ${bucket.from < 0 ? "bg-emerald-400" : "bg-red-400"}`}
+              className={`h-full rounded-full ${bucket.from < 0 ? "bg-emerald-400" : "bg-red-400"}`}
               style={{ width: `${max === 0 ? 0 : (bucket.count / max) * 100}%` }}
             />
           </div>
@@ -177,58 +174,65 @@ function Comparison({ summary }: { summary: BacktestSummary }) {
 export default function BacktestResult({ data }: { data: BacktestResponse }) {
   const summary = data.tradedSummary;
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-        <span>
-          数据截止 <strong className="text-slate-700">{data.dataDate}</strong>
-        </span>
-        <span>
-          区间 {data.from} → {data.to}
-        </span>
-        <span>
-          样本 {data.window.instruments} 只（有交易 {data.stocks.traded} 只）
-        </span>
-        <span>
-          {summary.trades} 笔交易 · 耗时 {(data.elapsedMs / 1000).toFixed(1)}s
-        </span>
-        {data.fromCache && (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">缓存命中</span>
-        )}
-      </div>
+    <section className="space-y-5">
+      <Panel
+        title="回测结果"
+        meta={`区间 ${data.from} → ${data.to}`}
+        actions={
+          <>
+            <span className="text-xs text-slate-400">
+              数据截止 <strong className="font-medium text-slate-700">{data.dataDate}</strong>
+            </span>
+            <span className="hidden text-xs text-slate-400 sm:inline">
+              样本 {data.window.instruments} 只（有交易 {data.stocks.traded} 只）
+            </span>
+            <span className="hidden text-xs tabular-nums text-slate-400 md:inline">
+              {summary.trades} 笔交易 · 耗时 {(data.elapsedMs / 1000).toFixed(1)}s
+            </span>
+            {data.fromCache && (
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">
+                缓存命中
+              </span>
+            )}
+          </>
+        }
+        bodyClassName="p-4"
+      >
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+          <p className="font-medium">先说边界</p>
+          <p className="mt-1">
+            宇宙是<strong>代理指标</strong>（{data.universe}），不是真实人气榜；样本只覆盖这一段市场周期，
+            <strong>结论不可外推</strong>。滑点未建模、涨跌停不可成交为近似、ST 历史状态不可知——这些都会让真实结果更差。
+          </p>
+        </div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
-        <p className="font-medium">先说边界</p>
-        <p className="mt-1">
-          宇宙是<strong>代理指标</strong>（{data.universe}），不是真实人气榜；样本只覆盖这一段市场周期，
-          <strong>结论不可外推</strong>。滑点未建模、涨跌停不可成交为近似、ST 历史状态不可知——这些都会让真实结果更差。
-        </p>
-      </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard label="胜率" value={pct(summary.winRate, 1)} hint={`${summary.wins}/${summary.trades}`} />
+          <StatCard label="平均单笔净收益" value={pct(summary.avgNetReturn)} hint={`中位 ${pct(summary.medianNetReturn)}`} />
+          <StatCard label="盈亏比" value={ratio(summary.profitFactor)} hint={`最差单笔 ${pct(summary.maxLoss)}`} />
+          <StatCard label="平均持有" value={`${num(summary.avgHoldingDays)} 交易日`} hint={`逐票平均回撤 ${pct(summary.avgMaxDrawdown)}`} />
+        </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="胜率" value={pct(summary.winRate, 1)} hint={`${summary.wins}/${summary.trades}`} />
-        <StatCard label="平均单笔净收益" value={pct(summary.avgNetReturn)} hint={`中位 ${pct(summary.medianNetReturn)}`} />
-        <StatCard label="盈亏比" value={ratio(summary.profitFactor)} hint={`最差单笔 ${pct(summary.maxLoss)}`} />
-        <StatCard label="平均持有" value={`${num(summary.avgHoldingDays)} 交易日`} hint={`逐票平均回撤 ${pct(summary.avgMaxDrawdown)}`} />
-      </div>
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <Comparison summary={summary} />
+        </div>
+      </Panel>
 
-      <Comparison summary={summary} />
-
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <BucketTable title="按年份" buckets={data.buckets.year} />
         <BucketTable title="按板块" buckets={data.buckets.board} />
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <h3 className="text-sm font-medium text-slate-700">单笔收益分布</h3>
-        <p className="mt-1 text-xs text-slate-500">
+      <Panel title="单笔收益分布" meta="中位数才是典型一笔" bodyClassName="p-4">
+        <p className="text-xs leading-relaxed text-slate-500">
           中位数 {pct(summary.medianNetReturn)} 才是"典型一笔"的样子；均值会被少数大赚的单子拉高。
         </p>
-        <div className="mt-2">
+        <div className="mt-3">
           <Histogram buckets={data.histogram} />
         </div>
-      </div>
+      </Panel>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <StockTable title="表现最好 10 只" rows={data.stocks.best} />
         <StockTable title="表现最差 10 只" rows={data.stocks.worst} />
       </div>

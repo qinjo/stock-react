@@ -41,17 +41,17 @@ export function RuleDetails({ hits }: { hits: ScreenRuleHit[] }) {
 
   return (
     <details className="mt-2 text-xs">
-      <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+      <summary className="cursor-pointer text-slate-500 transition-colors hover:text-slate-700">
         规则明细（{hits.length} 条判定，全部通过
         {unknownCount > 0 && `，其中 ${unknownCount} 条因缺数据未判定`}）
       </summary>
-      <div className="mt-1.5 space-y-1.5">
+      <div className="mt-1.5 space-y-1.5 rounded-lg border border-slate-100 bg-slate-50/60 p-2">
         {STAGE_ORDER.map((stage) => {
           const stageHits = hits.filter((hit) => hit.stage === stage);
           if (stageHits.length === 0) return null;
           return (
             <div key={stage}>
-              <p className="text-[11px] text-slate-400">{STAGE_LABELS[stage]}</p>
+              <p className="text-[11px] font-medium text-slate-400">{STAGE_LABELS[stage]}</p>
               <ul className="mt-0.5 space-y-0.5">
                 {stageHits.map((hit) => (
                   <li key={hit.id} className="flex flex-wrap items-baseline gap-1.5">

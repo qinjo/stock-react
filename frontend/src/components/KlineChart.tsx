@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { dispose, init, type Chart, type KLineData } from "klinecharts";
+import { Panel } from "./ui/Panel";
 import type { Kline } from "../types";
 
 /** 领域 K 线 → klinecharts v10 的 KLineData（timestamp 需毫秒）。 */
@@ -30,6 +31,9 @@ type Props = {
  * 日 K 走势图（klinecharts v10）。
  * v10 无 applyNewData：通过 setDataLoader 的 getBars 回调按需供给数据，
  * 数据经 ref 读取最新值，避免初始化闭包拿到旧数组。
+ *
+ * 卡片外框交给 Panel；fillHeight 时把 Panel 自身与内容区都变成 flex 列，
+ * 内层图表容器（h-[22rem] / lg:flex-1）才能吃掉剩余高度。
  */
 export default function KlineChart({ klines, symbol, fillHeight = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,11 +65,46 @@ export default function KlineChart({ klines, symbol, fillHeight = false }: Props
     chart?.setSymbol({ ticker: symbol, pricePrecision: 2, volumePrecision: 0 });
     chart?.setPeriod({ type: "day", span: 1 });
 
+    // A 股习惯：红涨绿跌，与快照卡、指标面板的配色保持一致。
+    // klinecharts 默认是绿涨红跌（欧美习惯），不改会与页面其余部分自相矛盾。
+    chart?.setStyles({
+      candle: {
+        bar: {
+          upColor: "#dc2626",
+          downColor: "#059669",
+          noChangeColor: "#64748b",
+          upBorderColor: "#dc2626",
+          downBorderColor: "#059669",
+          noChangeBorderColor: "#64748b",
+          upWickColor: "#dc2626",
+          downWickColor: "#059669",
+          noChangeWickColor: "#64748b",
+        },
+      },
+      indicator: {
+        ohlc: { upColor: "#dc2626", downColor: "#059669", noChangeColor: "#64748b" },
+        bars: [
+          {
+            upColor: "rgba(220, 38, 38, 0.55)",
+            downColor: "rgba(5, 150, 105, 0.55)",
+            noChangeColor: "rgba(100, 116, 139, 0.55)",
+          },
+        ],
+      },
+    });
+
     const onResize = () => chart?.resize();
     window.addEventListener("resize", onResize);
 
+    // 左栏是弹性高度：窗口/侧栏/面板内布局变化不触发 window resize，
+    // 用 ResizeObserver 兜住，否则画布高度没跟上会裁掉底部日期轴。
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onResize);
+    observer?.observe(el);
+
     return () => {
       window.removeEventListener("resize", onResize);
+      observer?.disconnect();
       dispose(el);
       chartRef.current = null;
     };
@@ -84,25 +123,26 @@ export default function KlineChart({ klines, symbol, fillHeight = false }: Props
   }, [symbol, klines]);
 
   return (
-    <section
-      className={`rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${
-        fillHeight ? "lg:flex lg:min-h-0 lg:flex-col" : ""
-      }`}
+    <Panel
+      title="日 K 走势（前复权）"
+      meta="MA50 / MA200"
+      className={`overflow-hidden ${fillHeight ? "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col" : ""}`}
+      bodyClassName={
+        fillHeight ? "flex min-h-0 flex-col p-4 lg:flex-1" : "p-4"
+      }
     >
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-slate-700">日 K 走势（前复权）</h2>
-        <span className="text-xs text-slate-400">MA50 / MA200</span>
-      </div>
       <div
         ref={containerRef}
-        className={`mt-2 w-full ${
-          fillHeight ? "h-[22rem] lg:h-auto lg:min-h-[12rem] lg:flex-1" : "h-[22rem]"
+        className={`w-full ${
+          fillHeight
+            ? "h-[22rem] lg:h-auto lg:min-h-[12rem] lg:flex-1"
+            : "h-[22rem] lg:h-[26rem]"
         }`}
         data-testid="kline-container"
       />
       {klines.length === 0 && (
         <p className="mt-2 text-sm text-slate-400">暂无 K 线数据</p>
       )}
-    </section>
+    </Panel>
   );
 }

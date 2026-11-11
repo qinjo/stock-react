@@ -1,3 +1,4 @@
+import { Panel } from "./ui/Panel";
 import type { Fundamentals, MetricPercentiles, PercentileStats } from "../types";
 
 type Props = {
@@ -47,16 +48,22 @@ function MetricRow({ label, m, digits = 2 }: { label: string; m: MetricPercentil
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
       <span className="w-16 font-medium text-slate-600">{label}</span>
-      <span className="w-16 text-right font-semibold text-slate-900">
+      <span className="w-16 text-right font-semibold tabular-nums text-slate-900">
         {fmt(m.current, digits)}
       </span>
       {marker && <PercentileBar percentile={marker.percentile} />}
       <span className="text-slate-500">
-        近3年 <span className="font-medium text-slate-700">{percentileText(m.y3)}</span>
-        {m.y3 && <span className="ml-1 text-slate-400">（{m.y3.min}–{m.y3.max}）</span>}
+        近3年{" "}
+        <span className="font-medium tabular-nums text-slate-700">{percentileText(m.y3)}</span>
+        {m.y3 && (
+          <span className="ml-1 tabular-nums text-slate-400">
+            （{m.y3.min}–{m.y3.max}）
+          </span>
+        )}
       </span>
       <span className="text-slate-500">
-        近5年 <span className="font-medium text-slate-700">{percentileText(m.y5)}</span>
+        近5年{" "}
+        <span className="font-medium tabular-nums text-slate-700">{percentileText(m.y5)}</span>
       </span>
     </div>
   );
@@ -71,15 +78,11 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
   const recent = f.periods.slice(0, 4);
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-slate-700">基本面与估值</h2>
-        <p className="text-xs text-slate-400">
-          {f.industry ?? "行业未知"}
-          {f.valuation.asOf && ` · 估值截至 ${f.valuation.asOf}`}
-        </p>
-      </header>
-
+    <Panel
+      title="基本面与估值"
+      meta={`${f.industry ?? "行业未知"}${f.valuation.asOf ? ` · 估值截至 ${f.valuation.asOf}` : ""}`}
+      bodyClassName="space-y-4 p-4"
+    >
       {/* ① 估值分位（相对自身历史） */}
       <section data-testid="valuation-percentiles">
         <h3 className="text-xs font-semibold text-slate-500">相对自身历史分位</h3>
@@ -87,7 +90,7 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
           <MetricRow label="PE_TTM" m={f.valuation.pe} />
           <MetricRow label="PB_MRQ" m={f.valuation.pb} />
         </div>
-        <p className="mt-1 text-xs text-slate-400">
+        <p className="mt-1.5 text-xs text-slate-400">
           分位越低表示越接近历史低估区间（&lt;20% 低位，&gt;80% 高位）
         </p>
       </section>
@@ -102,12 +105,12 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
             {peers.pe && (
               <div className="flex flex-wrap items-center gap-x-3">
                 <span className="text-slate-500">行业 PE 中位</span>
-                <span className="font-medium text-slate-800">{peers.pe.median}</span>
-                <span className="text-slate-400">
+                <span className="font-medium tabular-nums text-slate-800">{peers.pe.median}</span>
+                <span className="tabular-nums text-slate-400">
                   （25 分位 {peers.pe.p25} / 75 分位 {peers.pe.p75}）
                 </span>
                 {peers.pePremium !== null && (
-                  <span className={signClass(-peers.pePremium)}>
+                  <span className={`tabular-nums ${signClass(-peers.pePremium)}`}>
                     本股{peers.pePremium > 0 ? "溢价" : "折价"} {Math.abs(peers.pePremium)}%
                   </span>
                 )}
@@ -116,9 +119,9 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
             {peers.pb && (
               <div className="flex flex-wrap items-center gap-x-3">
                 <span className="text-slate-500">行业 PB 中位</span>
-                <span className="font-medium text-slate-800">{peers.pb.median}</span>
+                <span className="font-medium tabular-nums text-slate-800">{peers.pb.median}</span>
                 {peers.pbPremium !== null && (
-                  <span className={signClass(-peers.pbPremium)}>
+                  <span className={`tabular-nums ${signClass(-peers.pbPremium)}`}>
                     本股{peers.pbPremium > 0 ? "溢价" : "折价"} {Math.abs(peers.pbPremium)}%
                   </span>
                 )}
@@ -127,7 +130,7 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
             {peers.peRank !== null && (
               <p className="text-slate-500">
                 PE 在 {peers.peerCount} 只同业中排第{" "}
-                <span className="font-medium text-slate-800">{peers.peRank}</span> 低
+                <span className="font-medium tabular-nums text-slate-800">{peers.peRank}</span> 低
                 {peers.cheaperPeers !== null && `（${peers.cheaperPeers} 只更便宜）`}
               </p>
             )}
@@ -158,16 +161,22 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
                 {recent.map((p) => (
                   <tr key={p.reportDate} className="border-t border-slate-50">
                     <td className="py-1 text-slate-700">{p.reportName}</td>
-                    <td className="py-1 text-right text-slate-800">{yi(p.revenue)}</td>
-                    <td className={`py-1 text-right ${signClass(p.revenueYoy)}`}>
+                    <td className="py-1 text-right tabular-nums text-slate-800">{yi(p.revenue)}</td>
+                    <td className={`py-1 text-right tabular-nums ${signClass(p.revenueYoy)}`}>
                       {fmt(p.revenueYoy, 1, "%")}
                     </td>
-                    <td className="py-1 text-right text-slate-800">{yi(p.netProfit)}</td>
-                    <td className={`py-1 text-right ${signClass(p.netProfitYoy)}`}>
+                    <td className="py-1 text-right tabular-nums text-slate-800">
+                      {yi(p.netProfit)}
+                    </td>
+                    <td className={`py-1 text-right tabular-nums ${signClass(p.netProfitYoy)}`}>
                       {fmt(p.netProfitYoy, 1, "%")}
                     </td>
-                    <td className="py-1 text-right text-slate-700">{fmt(p.roe, 1, "%")}</td>
-                    <td className="py-1 text-right text-slate-700">{fmt(p.grossMargin, 1, "%")}</td>
+                    <td className="py-1 text-right tabular-nums text-slate-700">
+                      {fmt(p.roe, 1, "%")}
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-slate-700">
+                      {fmt(p.grossMargin, 1, "%")}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -175,6 +184,6 @@ export default function FundamentalsPanel({ fundamentals: f }: Props) {
           </div>
         </section>
       )}
-    </section>
+    </Panel>
   );
 }

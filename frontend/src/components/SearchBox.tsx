@@ -10,6 +10,9 @@ type Props = {
 
 /**
  * 股票搜索框：输入防抖 300ms 后请求补全，支持方向键/回车键盘选择。
+ *
+ * 只负责检索交互本身，卡片外框由调用方（App 的「股票检索」Panel）提供，
+ * 避免在 Panel 内部再叠一层边框与阴影。
  */
 export default function SearchBox({ onSelect, disabled }: Props) {
   const [query, setQuery] = useState("");
@@ -75,7 +78,7 @@ export default function SearchBox({ onSelect, disabled }: Props) {
 
   return (
     <div ref={boxRef} className="relative">
-      <label htmlFor="stock-input" className="block text-sm font-medium text-slate-700">
+      <label htmlFor="stock-input" className="block text-xs font-semibold text-slate-500">
         股票代码 / 名称
       </label>
       <input
@@ -91,14 +94,14 @@ export default function SearchBox({ onSelect, disabled }: Props) {
         onKeyDown={onKeyDown}
         onFocus={() => candidates.length > 0 && setOpen(true)}
         placeholder="如 600519 或 茅台"
-        className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
+        className="mt-1.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       />
 
       {open && (
         <ul
           id="stock-suggest"
           role="listbox"
-          className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-10 mt-1.5 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
           {candidates.map((c, i) => (
             <li
@@ -110,12 +113,12 @@ export default function SearchBox({ onSelect, disabled }: Props) {
                 e.preventDefault();
                 choose(c);
               }}
-              className={`cursor-pointer px-3 py-2 text-sm ${
-                i === activeIndex ? "bg-blue-50" : ""
+              className={`cursor-pointer px-3 py-2 text-sm transition-colors ${
+                i === activeIndex ? "bg-slate-100" : "hover:bg-slate-50"
               }`}
             >
               <span className="font-medium text-slate-800">{c.name}</span>
-              <span className="ml-2 text-slate-500">{c.code}</span>
+              <span className="ml-2 tabular-nums text-slate-500">{c.code}</span>
               <span className="ml-2 text-xs text-slate-400">{c.market}</span>
             </li>
           ))}

@@ -9,6 +9,7 @@ import {
   Strictness,
 } from "../types";
 import { ResultView } from "./screener/ResultView";
+import { Panel } from "./ui/Panel";
 import { DEFAULT_BOARDS, MODE_LABELS, NEXT_LOOSER, STRICTNESS_LABELS, BOARD_LABELS } from "./screener/labels";
 
 type ScreenState =
@@ -21,6 +22,11 @@ type Props = {
   /** 点候选股：切回单票分析并载入该股 */
   onPick: (target: { code: string; name: string }) => void;
 };
+
+/** 分段选择器：选中为深色实心，未选中为白底描边。 */
+const SEGMENT_BASE = "rounded-lg border px-2.5 py-1 text-sm transition-colors";
+const SEGMENT_ON = "border-slate-900 bg-slate-900 text-white";
+const SEGMENT_OFF = "border-slate-300 bg-white text-slate-700 hover:bg-slate-50";
 
 export default function ScreenerPanel({ onPick }: Props) {
   const [mode, setMode] = useState<ScreenMode>("trend");
@@ -71,12 +77,26 @@ export default function ScreenerPanel({ onPick }: Props) {
   const loading = state.kind === "loading";
 
   return (
-    <section className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+    <section className="space-y-5">
+      <Panel
+        title="筛选条件"
+        meta="规则扫描 · 书内规则 + 系统补丁"
+        actions={
+          <button
+            type="button"
+            onClick={() => void run()}
+            disabled={loading}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "筛选中…" : "开始筛选"}
+          </button>
+        }
+        bodyClassName="p-4"
+      >
+        <div className="grid gap-x-8 gap-y-4 md:grid-cols-3">
           <fieldset>
             <legend className="text-xs font-medium text-slate-500">模式</legend>
-            <div className="mt-1 flex gap-1">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {MODE_LABELS.map((item) => (
                 <button
                   key={item.value}
@@ -89,11 +109,7 @@ export default function ScreenerPanel({ onPick }: Props) {
                     setMode(item.value);
                     setState({ kind: "idle" });
                   }}
-                  className={`rounded border px-3 py-1 text-sm ${
-                    mode === item.value
-                      ? "border-slate-800 bg-slate-800 text-white"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+                  className={`${SEGMENT_BASE} ${mode === item.value ? SEGMENT_ON : SEGMENT_OFF}`}
                 >
                   {item.label}
                 </button>
@@ -103,7 +119,7 @@ export default function ScreenerPanel({ onPick }: Props) {
 
           <fieldset>
             <legend className="text-xs font-medium text-slate-500">严格度</legend>
-            <div className="mt-1 flex gap-1">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {STRICTNESS_LABELS.map((item) => (
                 <button
                   key={item.value}
@@ -114,10 +130,8 @@ export default function ScreenerPanel({ onPick }: Props) {
                     setStrictness(item.value);
                     setState({ kind: "idle" });
                   }}
-                  className={`rounded border px-3 py-1 text-sm ${
-                    strictness === item.value
-                      ? "border-slate-800 bg-slate-800 text-white"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  className={`${SEGMENT_BASE} ${
+                    strictness === item.value ? SEGMENT_ON : SEGMENT_OFF
                   }`}
                 >
                   {item.label}
@@ -128,34 +142,29 @@ export default function ScreenerPanel({ onPick }: Props) {
 
           <fieldset>
             <legend className="text-xs font-medium text-slate-500">股票池</legend>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
               {BOARD_LABELS.map((item) => (
-                <label key={item.value} className="flex items-center gap-1 text-sm text-slate-700">
+                <label
+                  key={item.value}
+                  className="flex items-center gap-1.5 text-sm text-slate-700"
+                >
                   <input
                     type="checkbox"
                     checked={boards.includes(item.value)}
                     onChange={() => toggleBoard(item.value)}
+                    className="h-3.5 w-3.5 rounded border-slate-300 accent-slate-900"
                   />
                   {item.label}
                 </label>
               ))}
             </div>
           </fieldset>
-
-          <button
-            type="button"
-            onClick={() => void run()}
-            disabled={loading}
-            className="rounded bg-slate-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {loading ? "筛选中…" : "开始筛选"}
-          </button>
         </div>
 
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-400">
           规则来自《短线操盘实战技法》，每条结果都标注了依据是书内还是系统补充的补丁。
         </p>
-      </div>
+      </Panel>
 
       {loading && (
         <p className="text-sm text-slate-500" role="status">
@@ -183,7 +192,7 @@ export default function ScreenerPanel({ onPick }: Props) {
 function ErrorBox({ code, message }: { code: ApiErrorCode; message: string }) {
   if (code === "DATA_NOT_READY") {
     return (
-      <div role="alert" className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+      <div role="alert" className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
         <p className="font-medium">本地日K库尚未初始化</p>
         <p className="mt-1">{message}</p>
         <p className="mt-2 text-xs text-sky-700">
@@ -199,7 +208,7 @@ function ErrorBox({ code, message }: { code: ApiErrorCode; message: string }) {
   return (
     <div
       role="alert"
-      className={`rounded-lg border p-4 text-sm ${
+      className={`rounded-xl border p-4 text-sm ${
         isSource ? "border-amber-200 bg-amber-50 text-amber-800" : "border-red-200 bg-red-50 text-red-700"
       }`}
     >

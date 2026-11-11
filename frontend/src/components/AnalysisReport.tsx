@@ -1,3 +1,4 @@
+import { Panel } from "./ui/Panel";
 import type { Analysis } from "../types";
 
 type Props = {
@@ -11,6 +12,9 @@ type Props = {
  * - 删除 conclusion 段（顶层已有 rating，conclusion 只会产出"综上所述"套话）
  * - 改为「数据边界」「什么会改变判断」「监控指标」三块收尾
  *   （dexter `memo-style.md:80-88`：以监控 KPI 收尾，而非结论段）
+ *
+ * 宽度策略：卡片（Panel）保持全宽，只有正文/列表限宽 max-w-4xl；
+ * 外层 article 不带 max-w-4xl，避免把整张卡片收窄。
  */
 export default function AnalysisReport({ analysis }: Props) {
   const s = analysis.sections;
@@ -27,67 +31,73 @@ export default function AnalysisReport({ analysis }: Props) {
     analysis.monitoring.length > 0;
 
   return (
-    <article className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      {blocks.map(({ title, body }) => (
-        <section key={title}>
-          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          {/* 卡片保持全宽，仅正文限宽：超宽屏上长行难读（理想行宽约 65–75 字符） */}
-          <p className="mt-1 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-            {body || "（模型未提供该节内容）"}
-          </p>
+    <article className="min-w-0">
+      <Panel
+        title="分析报告"
+        meta="四节正文 · 数据边界 · 证伪条件 · 监控指标"
+        bodyClassName="space-y-4 p-4"
+      >
+        {blocks.map(({ title, body }) => (
+          <section key={title}>
+            <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+            {/* 卡片保持全宽，仅正文限宽：超宽屏上长行难读（理想行宽约 65–75 字符） */}
+            <p className="mt-1 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+              {body || "（模型未提供该节内容）"}
+            </p>
+          </section>
+        ))}
+
+        <section>
+          <h3 className="text-sm font-semibold text-slate-800">④ 风险点清单</h3>
+          {s.risks.length > 0 ? (
+            <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm leading-relaxed text-slate-700">
+              {s.risks.map((risk, i) => (
+                <li key={`${i}-${risk.slice(0, 12)}`}>{risk}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-sm text-slate-400">（模型未列出风险点）</p>
+          )}
         </section>
-      ))}
 
-      <section>
-        <h3 className="text-sm font-semibold text-slate-800">④ 风险点清单</h3>
-        {s.risks.length > 0 ? (
-          <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm text-slate-700">
-            {s.risks.map((risk, i) => (
-              <li key={`${i}-${risk.slice(0, 12)}`}>{risk}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-1 text-sm text-slate-400">（模型未列出风险点）</p>
+        {hasTail && (
+          <div className="space-y-4 border-t border-slate-100 pt-4">
+            {analysis.dataLimits.length > 0 && (
+              <section data-testid="data-limits">
+                <h3 className="text-sm font-semibold text-amber-700">⑤ 数据边界与局限</h3>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  本次分析未覆盖的信息，及其对结论的限制
+                </p>
+                <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm text-slate-600">
+                  {analysis.dataLimits.map((limit, i) => (
+                    <li key={`${i}-${limit.slice(0, 12)}`}>{limit}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {analysis.whatWouldChangeMyMind !== "" && (
+              <section data-testid="change-my-mind">
+                <h3 className="text-sm font-semibold text-slate-800">⑥ 什么会改变这一判断</h3>
+                <p className="mt-1 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                  {analysis.whatWouldChangeMyMind}
+                </p>
+              </section>
+            )}
+
+            {analysis.monitoring.length > 0 && (
+              <section data-testid="monitoring">
+                <h3 className="text-sm font-semibold text-slate-800">⑦ 后续监控指标</h3>
+                <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm text-slate-700">
+                  {analysis.monitoring.map((item, i) => (
+                    <li key={`${i}-${item.slice(0, 12)}`}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
-      </section>
-
-      {hasTail && (
-        <div className="space-y-4 border-t border-slate-100 pt-4">
-          {analysis.dataLimits.length > 0 && (
-            <section data-testid="data-limits">
-              <h3 className="text-sm font-semibold text-amber-700">⑤ 数据边界与局限</h3>
-              <p className="mt-0.5 text-xs text-slate-400">
-                本次分析未覆盖的信息，及其对结论的限制
-              </p>
-              <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm text-slate-600">
-                {analysis.dataLimits.map((limit, i) => (
-                  <li key={`${i}-${limit.slice(0, 12)}`}>{limit}</li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {analysis.whatWouldChangeMyMind !== "" && (
-            <section data-testid="change-my-mind">
-              <h3 className="text-sm font-semibold text-slate-800">⑥ 什么会改变这一判断</h3>
-              <p className="mt-1 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                {analysis.whatWouldChangeMyMind}
-              </p>
-            </section>
-          )}
-
-          {analysis.monitoring.length > 0 && (
-            <section data-testid="monitoring">
-              <h3 className="text-sm font-semibold text-slate-800">⑦ 后续监控指标</h3>
-              <ul className="mt-1 max-w-4xl list-inside list-disc space-y-1 text-sm text-slate-700">
-                {analysis.monitoring.map((item, i) => (
-                  <li key={`${i}-${item.slice(0, 12)}`}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-      )}
+      </Panel>
     </article>
   );
 }

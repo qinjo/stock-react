@@ -28,12 +28,12 @@ export function DeepAnalysis({ code, name }: { code: string; name: string }) {
   const report = state.kind === "ok" ? state.data.analysis : null;
 
   return (
-    <div className="mt-2">
+    <div className="mt-2.5">
       <button
         type="button"
         onClick={() => void run()}
         disabled={state.kind === "loading"}
-        className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
       >
         {state.kind === "loading" ? "分析中…" : "深度分析（短线视角）"}
       </button>
@@ -45,7 +45,7 @@ export function DeepAnalysis({ code, name }: { code: string; name: string }) {
       )}
 
       {report && (
-        <div className="mt-2 space-y-1.5 rounded border border-slate-200 bg-slate-50 p-2 text-xs">
+        <div className="mt-2 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs leading-relaxed">
           <p className="text-slate-500">
             {name} · 短线视角 · 置信度 {report.confidence}
           </p>
